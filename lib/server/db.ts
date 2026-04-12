@@ -74,8 +74,22 @@ async function init() {
   if (!initPromise) {
     initPromise = (async () => {
       const currentClient = getClient();
-      await currentClient.execute('PRAGMA foreign_keys = ON');
-      await currentClient.execute('PRAGMA busy_timeout = 5000');
+      const initStatements = ['PRAGMA foreign_keys = ON', 'PRAGMA busy_timeout = 5000'];
+
+      for (const statement of initStatements) {
+        try {
+          await currentClient.execute(statement);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+
+          // Some hosted libSQL providers reject specific PRAGMA statements.
+          if (message.includes('SQL not allowed statement')) {
+            continue;
+          }
+
+          throw error;
+        }
+      }
     })();
   }
 
