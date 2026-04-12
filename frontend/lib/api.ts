@@ -1,19 +1,94 @@
 // ============================================================
 // API Client — lib/api.ts
 // ============================================================
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const DEV_API_BASE = 'http://localhost:4000';
+const TOKEN_STORAGE_KEY = 'ats_token';
 
-function getToken(): string | null {
+function getApiBase() {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+
+  if (typeof window === 'undefined') {
+    return process.env.BACKEND_URL || DEV_API_BASE;
+  }
+
+  const { hostname } = window.location;
+  return hostname === 'localhost' || hostname === '127.0.0.1' ? DEV_API_BASE : '/backend';
+}
+
+export function setAuthToken(token: string | null) {
+  if (typeof window === 'undefined') return;
+
+  if (token) {
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
+}
+
+async function getToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('ats_token');
+
+  const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+  if (storedToken) return storedToken;
+
+  try {
+    const res = await fetch('/api/auth/session', { cache: 'no-store' });
+    if (!res.ok) return null;
+
+    const session = await res.json();
+    const sessionToken = typeof session?.backendToken === 'string' ? session.backendToken : null;
+
+    if (sessionToken) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, sessionToken);
+    }
+
+    return sessionToken;
+  } catch {
+    return null;
+  }
+}
+
+function getFileNameFromHeaders(headers: Headers, fallback: string) {
+  const disposition = headers.get('content-disposition');
+  const match = disposition?.match(/filename="?([^"]+)"?/i);
+  return match?.[1] || fallback;
+}
+
+async function downloadFile(path: string, fallbackName: string) {
+  const token = await getToken();
+  if (!token) {
+    throw new Error('Please sign in again to download this file.');
+  }
+
+  const res = await fetch(`${getApiBase()}${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Download failed' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = getFileNameFromHeaders(res.headers, fallbackName);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getToken();
-  const res = await fetch(`${BASE}${path}`, {
+  const token = await getToken();
+  const res = await fetch(`${getApiBase()}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -60,8 +135,8 @@ export const api = {
     update: (id: string, data: Partial<Resume>) =>
       request<Resume>(`/api/resumes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/api/resumes/${id}`, { method: 'DELETE' }),
-    pdfUrl:      (id: string) => `${BASE}/api/resumes/${id}/pdf`,
-    coverPdfUrl: (id: string) => `${BASE}/api/resumes/${id}/cover-pdf`,
+    downloadPdf:      (id: string) => downloadFile(`/api/resumes/${id}/pdf`, `resume-${id}.pdf`),
+    downloadCoverPdf: (id: string) => downloadFile(`/api/resumes/${id}/cover-pdf`, `cover-letter-${id}.pdf`),
   },
 
   // ─── Generate ───────────────────────────────────────────

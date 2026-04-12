@@ -4,6 +4,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { setAuthToken } from '@/lib/api';
 
 const NAV = [
   { href: '/dashboard',  label: 'Dashboard',    icon: GridIcon },
@@ -17,8 +18,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (status === 'unauthenticated') router.push('/auth/signin');
-  }, [status, router]);
+    if (status === 'authenticated') {
+      setAuthToken((session as any)?.backendToken ?? null);
+      return;
+    }
+
+    if (status === 'unauthenticated') {
+      setAuthToken(null);
+      router.push('/auth/signin');
+    }
+  }, [router, session, status]);
 
   if (status === 'loading') {
     return (
@@ -73,7 +82,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[12px] text-white font-medium truncate">{user?.name || 'User'}</p>
-            <button onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+            <button onClick={() => {
+              setAuthToken(null);
+              signOut({ callbackUrl: '/auth/signin' });
+            }}
               className="text-[10px] text-white/30 hover:text-white/60 transition">Sign out</button>
           </div>
         </div>

@@ -65,8 +65,8 @@ const authOptions: AuthOptions = {
             provider:    account.provider,
             provider_id: account.providerAccountId,
             email:       user.email,
-            name:        user.name,
-            avatar_url:  user.image,
+            name:        user.name ?? undefined,
+            avatar_url:  user.image ?? undefined,
           }),
         });
         if (!res.ok) return false;

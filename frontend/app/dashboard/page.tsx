@@ -49,6 +49,14 @@ export default function DashboardPage() {
     toast.success('Resume deleted');
   }
 
+  async function handlePdfDownload(id: string) {
+    try {
+      await api.resumes.downloadPdf(id);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to download PDF');
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -60,7 +68,7 @@ export default function DashboardPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid gap-3 mb-6 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: 'Resumes Created', value: stats?.total_resumes ?? 0, note: 'all time' },
           { label: 'Avg ATS Score',   value: stats?.avg_ats_score ?? 0,  note: 'across all resumes' },
@@ -122,13 +130,13 @@ export default function DashboardPage() {
                       <Link href={`/resumes/${r.id}`} className="px-3 py-1 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600">
                         Edit
                       </Link>
-                      <a
-                        href={api.resumes.pdfUrl(r.id)}
-                        target="_blank"
+                      <button
+                        type="button"
+                        onClick={() => handlePdfDownload(r.id)}
                         className="px-3 py-1 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600"
                       >
                         PDF
-                      </a>
+                      </button>
                       <button
                         onClick={() => handleDelete(r.id, r.company_name)}
                         className="px-3 py-1 text-xs border border-red-100 rounded-lg hover:bg-red-50 transition text-red-500"

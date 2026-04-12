@@ -58,6 +58,22 @@ export default function ResumeEditorPage() {
     setContent({ ...content, [section]: value });
   }
 
+  async function handleResumePdfDownload() {
+    try {
+      await api.resumes.downloadPdf(id);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to download resume PDF');
+    }
+  }
+
+  async function handleCoverPdfDownload() {
+    try {
+      await api.resumes.downloadCoverPdf(id);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to download cover letter PDF');
+    }
+  }
+
   if (loading || !resume || !content) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -83,12 +99,13 @@ export default function ResumeEditorPage() {
             >
               {saving ? 'Saving...' : 'Save'}
             </button>
-            <a
-              href={api.resumes.pdfUrl(id)} target="_blank"
+            <button
+              type="button"
+              onClick={handleResumePdfDownload}
               className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600"
             >
               ↓ PDF
-            </a>
+            </button>
           </div>
         </div>
 
@@ -184,12 +201,13 @@ export default function ResumeEditorPage() {
                 rows={20}
                 className="w-full text-xs border border-gray-200 rounded-lg p-3 resize-y focus:outline-none focus:border-emerald-400 font-mono leading-relaxed"
               />
-              <a
-                href={api.resumes.coverPdfUrl(id)} target="_blank"
+              <button
+                type="button"
+                onClick={handleCoverPdfDownload}
                 className="mt-2 w-full flex items-center justify-center py-2 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600"
               >
                 ↓ Download Cover Letter PDF
-              </a>
+              </button>
             </div>
           )}
         </div>

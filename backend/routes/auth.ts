@@ -73,8 +73,8 @@ authRouter.post('/oauth', async (req: Request, res: Response, next: NextFunction
       provider:    z.enum(['google', 'github']),
       provider_id: z.string(),
       email:       z.string().email(),
-      name:        z.string().optional(),
-      avatar_url:  z.string().url().optional(),
+      name:        z.string().optional().nullable(),
+      avatar_url:  z.string().url().optional().nullable(),
     }).parse(req.body);
 
     // Upsert user
@@ -87,7 +87,7 @@ authRouter.post('/oauth', async (req: Request, res: Response, next: NextFunction
              avatar_url=COALESCE($3, users.avatar_url),
              updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
        RETURNING id, name`,
-      [email, name, avatar_url, provider, provider_id]
+      [email, name ?? email.split('@')[0], avatar_url ?? null, provider, provider_id]
     );
 
     await db.query('INSERT INTO profiles (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [user.id]);

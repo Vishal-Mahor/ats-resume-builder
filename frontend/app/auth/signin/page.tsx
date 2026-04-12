@@ -1,9 +1,11 @@
 'use client';
 // app/auth/signin/page.tsx
 import { signIn } from 'next-auth/react';
+import { getSession } from 'next-auth/react';
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { api, setAuthToken } from '@/lib/api';
 
 const showGoogleAuth = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === 'true';
 const showGithubAuth = process.env.NEXT_PUBLIC_ENABLE_GITHUB_AUTH === 'true';
@@ -20,16 +22,7 @@ export default function SignInPage() {
     setLoading(true);
     try {
       if (mode === 'register') {
-        // Call backend register then sign in
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, name: email.split('@')[0] }),
-        });
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || 'Registration failed');
-        }
+        await api.auth.register(email, password, email.split('@')[0]);
         toast.success('Account created! Signing you in...');
       }
 
@@ -37,7 +30,10 @@ export default function SignInPage() {
         email, password, redirect: false,
       });
       if (result?.error) throw new Error('Invalid email or password');
+      const session = await getSession();
+      setAuthToken((session as any)?.backendToken ?? null);
       router.push('/dashboard');
+      router.refresh();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
