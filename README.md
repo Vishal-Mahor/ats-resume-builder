@@ -19,24 +19,22 @@
 
 ```
 ats-resume-builder/
-├── frontend/                    # Next.js app (UI + API)
-│   ├── app/
-│   │   ├── api/                 # Route handlers for auth, profile, resumes, PDF, AI
-│   │   ├── auth/                # Sign-in and auth error pages
-│   │   ├── dashboard/           # Dashboard page
-│   │   ├── resumes/             # Resume list & editor
-│   │   ├── new-resume/          # 5-step wizard
-│   │   └── profile/             # Profile management
-│   ├── components/
-│   │   ├── ats/ATSPanel.tsx     # ATS score + keyword panel
-│   │   ├── resume/ResumePreview.tsx  # Live resume preview
-│   │   └── wizard/              # Step wizard components
-│   ├── lib/
-│   │   ├── api.ts               # Browser API client
-│   │   └── server/              # DB, auth, AI prompts, PDF generation
-│   └── scripts/
-│       └── migrate.mjs          # Database migration runner
-│
+├── app/
+│   ├── api/                     # Route handlers for auth, profile, resumes, PDF, AI
+│   ├── auth/                    # Sign-in and auth error pages
+│   ├── dashboard/               # Dashboard page
+│   ├── resumes/                 # Resume list & editor
+│   ├── new-resume/              # 5-step wizard
+│   └── profile/                 # Profile management
+├── components/
+│   ├── ats/ATSPanel.tsx         # ATS score + keyword panel
+│   ├── resume/ResumePreview.tsx # Live resume preview
+│   └── wizard/                  # Step wizard components
+├── lib/
+│   ├── api.ts                   # Browser API client
+│   └── server/                  # DB, auth, AI prompts, PDF generation
+├── scripts/
+│   └── migrate.mjs              # Database migration runner
 ├── database/
 │   └── schema.sql               # Turso / SQLite schema
 ```
@@ -56,22 +54,20 @@ ats-resume-builder/
 git clone https://github.com/you/ats-resume-builder.git
 cd ats-resume-builder
 
-# App
-cd frontend && npm install
+npm install
 ```
 
 ### 2. Configure environment variables
 
 ```bash
-cp frontend/.env.example frontend/.env.local
+cp .env.example .env.local
 ```
 
-Edit `frontend/.env.local` with your credentials (see `.env.example` for all variables).
+Edit `.env.local` with your credentials (see `.env.example` for all variables).
 
 ### 3. Set up the database
 
 ```bash
-cd frontend
 npm run db:migrate
 ```
 
@@ -90,7 +86,7 @@ npm run db:migrate
 ### 5. Start the app
 
 ```bash
-cd frontend && npm run dev
+npm run dev
 # → http://localhost:3000
 ```
 
@@ -145,32 +141,26 @@ User submits JD
 
 ## 🚢 Production Deployment
 
-### Option A: Docker Compose
-
-```bash
-docker-compose up --build
-```
-
-### Option B: Vercel
+### Option A: Vercel
 
 Deploy this repo as a single Vercel project.
 
 Use these Vercel settings:
 
-- Root Directory: `frontend`
+- Root Directory: `.`
 - Framework Preset: `Next.js`
 
 This repo includes:
 
-- [frontend/vercel.json](/Users/vishalmahor/Documents/startup/ats-resume-builder/frontend/vercel.json)
+- [vercel.json](/Users/vishalmahor/Documents/startup/repo%20insights/ats-resume-builder/vercel.json)
 
 Important:
 
-- Add the env vars from `frontend/.env.example` to the Vercel project
+- Add the env vars from `.env.example` to the Vercel project
 - Set `NEXTAUTH_URL` to your deployed app URL
 - Add Turso and OpenAI env vars to the same project
 
-### Option C: Other PaaS
+### Option B: Other PaaS
 
 - **App** → Vercel (recommended) / Railway / Render / Fly.io
 - **Database** → Turso
@@ -186,9 +176,9 @@ Important:
 
 | Layer | Tech |
 |-------|------|
-| Frontend | Next.js 14, Tailwind CSS, React |
+| App | Next.js, Tailwind CSS, React |
 | Auth | NextAuth.js (Google, GitHub, Email) |
-| Backend | Node.js, Express, TypeScript |
+| Server Runtime | Next.js Route Handlers + Node.js |
 | Database | Turso / libSQL |
 | AI | OpenAI Responses API |
 | PDF | Puppeteer |

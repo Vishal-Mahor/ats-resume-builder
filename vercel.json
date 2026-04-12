@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "functions": {
+    "app/api/generate-resume/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/resumes/[id]/pdf/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/resumes/[id]/cover-pdf/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}

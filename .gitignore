@@ -1,10 +1,8 @@
 # Dependencies
 node_modules/
-frontend/node_modules/
 
 # Build output
 .next/
-frontend/.next/
 dist/
 build/
 coverage/
@@ -16,7 +14,6 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
-frontend/.env.local
 
 # Logs
 *.log
