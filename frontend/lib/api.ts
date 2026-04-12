@@ -1,18 +1,10 @@
 // ============================================================
 // API Client — lib/api.ts
 // ============================================================
-const DEV_API_BASE = 'http://localhost:4000';
 const TOKEN_STORAGE_KEY = 'ats_token';
 
 function getApiBase() {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-
-  if (typeof window === 'undefined') {
-    return process.env.BACKEND_URL || DEV_API_BASE;
-  }
-
-  const { hostname } = window.location;
-  return hostname === 'localhost' || hostname === '127.0.0.1' ? DEV_API_BASE : '/backend';
+  return '';
 }
 
 export function setAuthToken(token: string | null) {

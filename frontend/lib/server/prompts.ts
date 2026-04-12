@@ -1,11 +1,3 @@
-// ============================================================
-// AI Prompt Templates — ATS Resume Builder
-// Model: OpenAI via Responses API
-// ============================================================
-
-/**
- * STEP 1: Extract and analyze the Job Description
- */
 export const JD_ANALYSIS_PROMPT = (jd: string) => `
 You are an expert ATS (Applicant Tracking System) analyst. Analyze the job description below.
 
@@ -28,13 +20,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 }
 `;
 
-/**
- * STEP 2: Match user profile against JD analysis
- */
-export const MATCH_PROFILE_PROMPT = (
-  userProfile: object,
-  jdAnalysis: object
-) => `
+export const MATCH_PROFILE_PROMPT = (userProfile: object, jdAnalysis: object) => `
 You are an ATS resume optimization expert. Compare the candidate profile with the job requirements.
 
 <candidate_profile>
@@ -64,9 +50,6 @@ Return ONLY valid JSON:
 }
 `;
 
-/**
- * STEP 3: Generate ATS-optimized resume content
- */
 export const RESUME_GENERATION_PROMPT = (
   userProfile: object,
   jdAnalysis: object,
@@ -139,9 +122,6 @@ Return ONLY valid JSON:
 }
 `;
 
-/**
- * STEP 4: Generate customized cover letter
- */
 export const COVER_LETTER_PROMPT = (
   userProfile: object,
   jdAnalysis: object,
@@ -178,31 +158,4 @@ RULES:
 6. Length: 200-280 words
 
 Return ONLY the plain text cover letter. No JSON. No markdown. No subject line.
-`;
-
-/**
- * STEP 5: Regenerate a specific section
- */
-export const SECTION_REGEN_PROMPT = (
-  section: string,
-  currentContent: string,
-  jdKeywords: string[],
-  feedback?: string
-) => `
-You are an expert resume writer. Improve this specific resume section.
-
-SECTION: ${section}
-CURRENT CONTENT:
-${currentContent}
-
-TARGET KEYWORDS TO INCLUDE (naturally): ${jdKeywords.join(', ')}
-${feedback ? `USER FEEDBACK: ${feedback}` : ''}
-
-RULES:
-- Stronger action verbs
-- Add quantified metrics where missing
-- Keep ATS-friendly (no special characters, no tables)
-- Match length and format of original
-
-Return ONLY the improved section content. No explanation. No JSON.
 `;

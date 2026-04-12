@@ -1,68 +1,80 @@
-// ============================================================
-// PDF Generation Service — Puppeteer
-// Generates ATS-friendly, clean single-column PDF resumes
-// ============================================================
 import puppeteer from 'puppeteer';
 
 export interface ResumeContent {
-  summary:    string;
-  skills:     { technical: string[]; tools: string[]; other: string[] };
+  summary: string;
+  skills: { technical: string[]; tools: string[]; other: string[] };
   experience: Array<{
-    job_title: string; company: string; location?: string;
-    start_date: string; end_date: string; bullets: string[];
+    job_title: string;
+    company: string;
+    location?: string;
+    start_date: string;
+    end_date: string;
+    bullets: string[];
   }>;
-  projects:   Array<{ name: string; tech_stack: string; description: string; url?: string }>;
-  education:  Array<{ degree: string; institution: string; year: string; gpa?: string }>;
+  projects: Array<{ name: string; tech_stack: string; description: string; url?: string }>;
+  education: Array<{ degree: string; institution: string; year: string; gpa?: string }>;
 }
 
 export interface UserMeta {
-  name: string; email: string; phone?: string;
-  location?: string; linkedin?: string; github?: string;
+  name: string;
+  email: string;
+  phone?: string;
+  location?: string;
+  linkedin?: string;
+  github?: string;
 }
 
-// ─── Build ATS-clean HTML ─────────────────────────────────
-function buildResumeHtml(meta: UserMeta, content: ResumeContent): string {
-  const skills = [
-    ...content.skills.technical,
-    ...content.skills.tools,
-    ...content.skills.other,
-  ].join(' • ');
+function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
+  const skills = [...content.skills.technical, ...content.skills.tools, ...content.skills.other].join(' • ');
 
-  const experienceHtml = content.experience.map(exp => `
+  const experienceHtml = content.experience
+    .map(
+      (experience) => `
     <div class="entry">
       <div class="entry-header">
-        <span class="entry-title">${exp.job_title}</span>
-        <span class="entry-date">${exp.start_date} – ${exp.end_date}</span>
+        <span class="entry-title">${experience.job_title}</span>
+        <span class="entry-date">${experience.start_date} – ${experience.end_date}</span>
       </div>
-      <div class="entry-sub">${exp.company}${exp.location ? ', ' + exp.location : ''}</div>
+      <div class="entry-sub">${experience.company}${experience.location ? `, ${experience.location}` : ''}</div>
       <ul>
-        ${exp.bullets.map(b => `<li>${b}</li>`).join('\n')}
+        ${experience.bullets.map((bullet) => `<li>${bullet}</li>`).join('\n')}
       </ul>
     </div>
-  `).join('');
+  `
+    )
+    .join('');
 
-  const projectsHtml = content.projects.map(p => `
+  const projectsHtml = content.projects
+    .map(
+      (project) => `
     <div class="entry">
       <div class="entry-header">
-        <span class="entry-title">${p.name}</span>
-        <span class="entry-sub-inline">${p.tech_stack}</span>
+        <span class="entry-title">${project.name}</span>
+        <span class="entry-sub-inline">${project.tech_stack}</span>
       </div>
-      <ul><li>${p.description}</li></ul>
+      <ul><li>${project.description}</li></ul>
     </div>
-  `).join('');
+  `
+    )
+    .join('');
 
-  const eduHtml = content.education.map(e => `
+  const educationHtml = content.education
+    .map(
+      (entry) => `
     <div class="entry">
       <div class="entry-header">
-        <span class="entry-title">${e.degree}</span>
-        <span class="entry-date">${e.year}</span>
+        <span class="entry-title">${entry.degree}</span>
+        <span class="entry-date">${entry.year}</span>
       </div>
-      <div class="entry-sub">${e.institution}${e.gpa ? ' | GPA: ' + e.gpa : ''}</div>
+      <div class="entry-sub">${entry.institution}${entry.gpa ? ` | GPA: ${entry.gpa}` : ''}</div>
     </div>
-  `).join('');
+  `
+    )
+    .join('');
 
   const contact = [meta.email, meta.phone, meta.linkedin, meta.github, meta.location]
-    .filter(Boolean).join(' | ');
+    .filter(Boolean)
+    .join(' | ');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -75,7 +87,7 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent): string {
     font-size: 11pt;
     color: #111;
     line-height: 1.4;
-    padding: 0.75in 0.75in;
+    padding: 0.75in;
   }
   h1.name {
     font-family: Arial, sans-serif;
@@ -135,18 +147,12 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent): string {
   ${projectsHtml}
 
   <div class="section-title">Education</div>
-  ${eduHtml}
+  ${educationHtml}
 </body>
 </html>`;
 }
 
-// ─── Generate PDF Buffer ──────────────────────────────────
-export async function generateResumePdf(
-  meta: UserMeta,
-  content: ResumeContent
-): Promise<Buffer> {
-  const html = buildResumeHtml(meta, content);
-
+export async function generateResumePdf(meta: UserMeta, content: ResumeContent) {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -154,32 +160,42 @@ export async function generateResumePdf(
 
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    await page.setContent(buildResumeHtml(meta, content), { waitUntil: 'networkidle0' });
     const pdf = await page.pdf({
       format: 'Letter',
       printBackground: false,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 }, // CSS handles margins
+      margin: { top: 0, right: 0, bottom: 0, left: 0 },
     });
+
     return Buffer.from(pdf);
   } finally {
     await browser.close();
   }
 }
 
-// ─── Generate Cover Letter PDF ────────────────────────────
 export async function generateCoverLetterPdf(
   meta: UserMeta,
   coverLetter: string,
   companyName: string,
   jobTitle: string
-): Promise<Buffer> {
-  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const paragraphs = coverLetter.split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+) {
+  const today = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const paragraphs = coverLetter
+    .split('\n\n')
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`)
+    .join('');
 
   const html = `<!DOCTYPE html>
-<html><head><meta charset="UTF-8">
+<html lang="en">
+<head>
+<meta charset="UTF-8">
 <style>
-  body { font-family: Arial, sans-serif; font-size: 11pt; color: #111; line-height: 1.6; padding: 1in 1in; }
+  body { font-family: Arial, sans-serif; font-size: 11pt; color: #111; line-height: 1.6; padding: 1in; }
   .header { margin-bottom: 32px; }
   .name { font-size: 16pt; font-weight: bold; }
   .contact { font-size: 9.5pt; color: #555; margin-top: 4px; }
@@ -188,7 +204,8 @@ export async function generateCoverLetterPdf(
   p { margin-bottom: 14px; }
   .sign { margin-top: 28px; }
 </style>
-</head><body>
+</head>
+<body>
   <div class="header">
     <div class="name">${meta.name}</div>
     <div class="contact">${[meta.email, meta.phone, meta.location].filter(Boolean).join(' | ')}</div>
@@ -204,12 +221,14 @@ export async function generateCoverLetterPdf(
     Sincerely,<br><br>
     <strong>${meta.name}</strong>
   </div>
-</body></html>`;
+</body>
+</html>`;
 
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
+
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });

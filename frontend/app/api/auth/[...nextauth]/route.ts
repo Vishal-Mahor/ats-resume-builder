@@ -5,11 +5,9 @@ import NextAuth, { AuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import GitHubProvider from 'next-auth/providers/github';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import { loginWithEmail, upsertOAuthUser } from '@/lib/server/auth-service';
 
-const API_URL =
-  process.env.BACKEND_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:4000';
+export const runtime = 'nodejs';
 
 const providers: AuthOptions['providers'] = [];
 
@@ -39,14 +37,20 @@ providers.push(
       password: { label: 'Password', type: 'password' },
     },
     async authorize(credentials) {
-      const res = await fetch(`${API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-      });
-      if (!res.ok) return null;
-      const { user, token } = await res.json();
-      return { ...user, backendToken: token };
+      if (!credentials?.email || !credentials.password) {
+        return null;
+      }
+
+      try {
+        const { user, token } = await loginWithEmail({
+          email: credentials.email,
+          password: credentials.password,
+        });
+
+        return { ...user, backendToken: token };
+      } catch {
+        return null;
+      }
     },
   })
 );
@@ -56,33 +60,38 @@ const authOptions: AuthOptions = {
 
   callbacks: {
     // After OAuth sign-in, exchange for our backend JWT
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       if (account?.provider === 'google' || account?.provider === 'github') {
-        const res = await fetch(`${API_URL}/api/auth/oauth`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            provider:    account.provider,
-            provider_id: account.providerAccountId,
-            email:       user.email,
-            name:        user.name ?? undefined,
-            avatar_url:  user.image ?? undefined,
-          }),
+        if (!user.email) {
+          return false;
+        }
+
+        const result = await upsertOAuthUser({
+          provider: account.provider,
+          providerId: account.providerAccountId,
+          email: user.email,
+          name: user.name ?? undefined,
+          avatarUrl: user.image ?? undefined,
         });
-        if (!res.ok) return false;
-        const { token } = await res.json();
-        (user as any).backendToken = token;
+
+        user.name = result.user.name;
+        user.email = result.user.email;
+        user.image = result.user.avatar_url ?? user.image;
+        user.backendToken = result.token;
       }
       return true;
     },
 
     async jwt({ token, user }) {
-      if (user) token.backendToken = (user as any).backendToken;
+      if (user) {
+        token.backendToken = user.backendToken;
+      }
+
       return token;
     },
 
     async session({ session, token }) {
-      (session as any).backendToken = token.backendToken;
+      session.backendToken = token.backendToken;
       return session;
     },
   },

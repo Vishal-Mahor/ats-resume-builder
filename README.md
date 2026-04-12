@@ -1,6 +1,6 @@
 # ATS Resume Builder AI
 
-> AI-powered, ATS-optimized resume generation SaaS. Built with Next.js, Express, Turso, and OpenAI.
+> AI-powered, ATS-optimized resume generation SaaS. Built with Next.js, Turso, and OpenAI.
 
 ## ✨ Features
 
@@ -19,9 +19,10 @@
 
 ```
 ats-resume-builder/
-├── frontend/                    # Next.js 14 (App Router)
+├── frontend/                    # Next.js app (UI + API)
 │   ├── app/
-│   │   ├── api/auth/[...nextauth]/  # NextAuth handler
+│   │   ├── api/                 # Route handlers for auth, profile, resumes, PDF, AI
+│   │   ├── auth/                # Sign-in and auth error pages
 │   │   ├── dashboard/           # Dashboard page
 │   │   ├── resumes/             # Resume list & editor
 │   │   ├── new-resume/          # 5-step wizard
@@ -30,26 +31,14 @@ ats-resume-builder/
 │   │   ├── ats/ATSPanel.tsx     # ATS score + keyword panel
 │   │   ├── resume/ResumePreview.tsx  # Live resume preview
 │   │   └── wizard/              # Step wizard components
-│   └── lib/api.ts               # API client
-│
-├── backend/                     # Express + TypeScript
-│   ├── routes/
-│   │   ├── auth.ts              # Login, register, OAuth
-│   │   ├── profile.ts           # CRUD user profile
-│   │   ├── resumes.ts           # Resume CRUD + PDF
-│   │   └── generate.ts          # AI generation endpoint
-│   ├── services/
-│   │   └── pdfService.ts        # Puppeteer PDF generation
-│   ├── prompts/index.ts         # OpenAI prompt templates
-│   ├── middleware/
-│   │   ├── auth.ts              # JWT verification
-│   │   └── errorHandler.ts      # Global error handler
-│   └── server.ts                # Express app entry
+│   ├── lib/
+│   │   ├── api.ts               # Browser API client
+│   │   └── server/              # DB, auth, AI prompts, PDF generation
+│   └── scripts/
+│       └── migrate.mjs          # Database migration runner
 │
 ├── database/
 │   └── schema.sql               # Turso / SQLite schema
-│
-└── .env.example                 # All required env vars
 ```
 
 ---
@@ -67,29 +56,22 @@ ats-resume-builder/
 git clone https://github.com/you/ats-resume-builder.git
 cd ats-resume-builder
 
-# Frontend
+# App
 cd frontend && npm install
-
-# Backend
-cd ../backend && npm install
 ```
 
 ### 2. Configure environment variables
 
 ```bash
-# Frontend
 cp frontend/.env.example frontend/.env.local
-
-# Backend
-cp backend/.env.example backend/.env
 ```
 
-Edit both files with your credentials (see `.env.example` for all variables).
+Edit `frontend/.env.local` with your credentials (see `.env.example` for all variables).
 
 ### 3. Set up the database
 
 ```bash
-cd backend
+cd frontend
 npm run db:migrate
 ```
 
@@ -105,14 +87,9 @@ npm run db:migrate
 2. Create OAuth App
 3. Set callback URL: `http://localhost:3000/api/auth/callback/github`
 
-### 5. Start dev servers
+### 5. Start the app
 
 ```bash
-# Terminal 1 — Backend
-cd backend && npm run dev
-# → http://localhost:4000
-
-# Terminal 2 — Frontend
 cd frontend && npm run dev
 # → http://localhost:3000
 ```
@@ -176,40 +153,32 @@ docker-compose up --build
 
 ### Option B: Vercel
 
-Deploy this repo as two separate Vercel projects:
-
-1. **Frontend project**
-2. **Backend project**
+Deploy this repo as a single Vercel project.
 
 Use these Vercel settings:
 
-- Frontend Root Directory: `frontend`
-- Backend Root Directory: `backend`
-- Frontend Framework Preset: `Next.js`
-- Backend Framework Preset: `Express`
+- Root Directory: `frontend`
+- Framework Preset: `Next.js`
 
 This repo includes:
 
 - [frontend/vercel.json](/Users/vishalmahor/Documents/startup/ats-resume-builder/frontend/vercel.json)
-- [backend/vercel.json](/Users/vishalmahor/Documents/startup/ats-resume-builder/backend/vercel.json)
 
 Important:
 
-- Set the frontend env `BACKEND_URL` and `NEXT_PUBLIC_API_URL` to your backend Vercel URL
-- Set the backend env `FRONTEND_URL` to your frontend Vercel URL
-- Add Turso and OpenAI env vars only to the backend project
+- Add the env vars from `frontend/.env.example` to the Vercel project
+- Set `NEXTAUTH_URL` to your deployed app URL
+- Add Turso and OpenAI env vars to the same project
 
 ### Option C: Other PaaS
 
-- **Frontend** → Vercel (zero config for Next.js)
-- **Backend** → Railway / Render / Fly.io
+- **App** → Vercel (recommended) / Railway / Render / Fly.io
 - **Database** → Turso
 
 ### Environment for production:
 - Set `NODE_ENV=production`
 - Use strong `JWT_SECRET` (32+ chars)
-- Set `FRONTEND_URL` to your actual domain
-- Configure CORS accordingly
+- Set `NEXTAUTH_URL` to your actual domain
 
 ---
 

@@ -1,7 +1,4 @@
-// ============================================================
-// Database — Turso/libSQL client with a small pg-like wrapper
-// ============================================================
-import { createClient, type InValue } from '@libsql/client';
+import { createClient, type Client, type InValue } from '@libsql/client';
 
 type QueryResult<T = any> = {
   rows: T[];
@@ -10,17 +7,6 @@ type QueryResult<T = any> = {
 };
 
 type QueryArg = InValue | undefined;
-
-const url = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL;
-
-if (!url) {
-  throw new Error('Missing TURSO_DATABASE_URL');
-}
-
-const client = createClient({
-  url,
-  authToken: process.env.TURSO_AUTH_TOKEN || undefined,
-});
 
 const JSON_COLUMNS = new Set([
   'bullets',
@@ -32,7 +18,28 @@ const JSON_COLUMNS = new Set([
 
 const BOOLEAN_COLUMNS = new Set(['is_current']);
 
+let client: Client | null = null;
 let initPromise: Promise<void> | null = null;
+
+function getDatabaseUrl() {
+  return process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL;
+}
+
+function getClient() {
+  if (client) return client;
+
+  const url = getDatabaseUrl();
+  if (!url) {
+    throw new Error('Missing TURSO_DATABASE_URL');
+  }
+
+  client = createClient({
+    url,
+    authToken: process.env.TURSO_AUTH_TOKEN || undefined,
+  });
+
+  return client;
+}
 
 function normalizeRow(row: Record<string, unknown>) {
   const normalized: Record<string, unknown> = {};
@@ -66,8 +73,9 @@ function toSqlitePlaceholders(sql: string) {
 async function init() {
   if (!initPromise) {
     initPromise = (async () => {
-      await client.execute('PRAGMA foreign_keys = ON');
-      await client.execute('PRAGMA busy_timeout = 5000');
+      const currentClient = getClient();
+      await currentClient.execute('PRAGMA foreign_keys = ON');
+      await currentClient.execute('PRAGMA busy_timeout = 5000');
     })();
   }
 
@@ -78,7 +86,7 @@ export const db = {
   async query<T = any>(sql: string, args: QueryArg[] = []): Promise<QueryResult<T>> {
     await init();
 
-    const result = await client.execute({
+    const result = await getClient().execute({
       sql: toSqlitePlaceholders(sql),
       args: args.map((arg) => arg ?? null),
     });
