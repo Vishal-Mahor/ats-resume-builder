@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS resumes (
   resume_html       TEXT,
   cover_letter      TEXT,
   cover_letter_tone TEXT DEFAULT 'formal',
+  source_platform   TEXT NOT NULL DEFAULT 'manual',
   ats_score         INTEGER,
   matched_keywords  TEXT DEFAULT '[]',
   missing_keywords  TEXT DEFAULT '[]',

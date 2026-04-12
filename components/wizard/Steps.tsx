@@ -3,7 +3,7 @@
 // Wizard Step Components
 // ============================================================
 import { useState, KeyboardEvent } from 'react';
-import type { WizardData } from '@/app/new-resume/page';
+import type { WizardData } from '@/app/(app)/new-resume/page';
 
 // ─── Shared Primitives ────────────────────────────────────
 function Label({ children }: { children: React.ReactNode }) {

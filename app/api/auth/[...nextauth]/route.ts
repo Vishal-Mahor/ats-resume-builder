@@ -4,8 +4,7 @@
 import NextAuth, { AuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import GitHubProvider from 'next-auth/providers/github';
-import CredentialsProvider from 'next-auth/providers/credentials';
-import { loginWithEmail, upsertOAuthUser } from '@/lib/server/auth-service';
+import { upsertOAuthUser } from '@/lib/server/auth-service';
 
 export const runtime = 'nodejs';
 
@@ -29,32 +28,6 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
   );
 }
 
-providers.push(
-  CredentialsProvider({
-    name: 'Email',
-    credentials: {
-      email: { label: 'Email', type: 'email' },
-      password: { label: 'Password', type: 'password' },
-    },
-    async authorize(credentials) {
-      if (!credentials?.email || !credentials.password) {
-        return null;
-      }
-
-      try {
-        const { user, token } = await loginWithEmail({
-          email: credentials.email,
-          password: credentials.password,
-        });
-
-        return { ...user, backendToken: token };
-      } catch {
-        return null;
-      }
-    },
-  })
-);
-
 const authOptions: AuthOptions = {
   providers,
 
@@ -77,21 +50,24 @@ const authOptions: AuthOptions = {
         user.name = result.user.name;
         user.email = result.user.email;
         user.image = result.user.avatar_url ?? user.image;
-        user.backendToken = result.token;
+        user.accessToken = result.accessToken;
+        user.refreshToken = result.refreshToken;
       }
       return true;
     },
 
     async jwt({ token, user }) {
       if (user) {
-        token.backendToken = user.backendToken;
+        token.accessToken = user.accessToken;
+        token.refreshToken = user.refreshToken;
       }
 
       return token;
     },
 
     async session({ session, token }) {
-      session.backendToken = token.backendToken;
+      session.accessToken = token.accessToken as string | undefined;
+      session.refreshToken = token.refreshToken as string | undefined;
       return session;
     },
   },

@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { db } from './db';
 import { HttpError } from './http';
-import { signAccessToken } from './auth-token';
+import { signAccessToken, signRefreshToken } from './auth-token';
 
 type AuthUser = {
   id: string;
@@ -33,7 +33,8 @@ export async function registerWithEmail(input: {
   await db.query('INSERT INTO profiles (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [user.id]);
 
   return {
-    token: signAccessToken(user.id),
+    accessToken: signAccessToken(user.id),
+    refreshToken: signRefreshToken(user.id),
     user: {
       id: user.id,
       email: input.email,
@@ -61,7 +62,8 @@ export async function loginWithEmail(input: { email: string; password: string })
   }
 
   return {
-    token: signAccessToken(user.id),
+    accessToken: signAccessToken(user.id),
+    refreshToken: signRefreshToken(user.id),
     user: {
       id: user.id,
       email: input.email,
@@ -101,7 +103,8 @@ export async function upsertOAuthUser(input: {
   await db.query('INSERT INTO profiles (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [user.id]);
 
   return {
-    token: signAccessToken(user.id),
+    accessToken: signAccessToken(user.id),
+    refreshToken: signRefreshToken(user.id),
     user,
   };
 }

@@ -21,6 +21,30 @@ const BOOLEAN_COLUMNS = new Set(['is_current']);
 let client: Client | null = null;
 let initPromise: Promise<void> | null = null;
 
+async function ensureOptionalColumns(currentClient: Client) {
+  const migrationStatements = [
+    `ALTER TABLE resumes ADD COLUMN source_platform TEXT NOT NULL DEFAULT 'manual'`,
+  ];
+
+  for (const statement of migrationStatements) {
+    try {
+      await currentClient.execute(statement);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (
+        message.includes('duplicate column name') ||
+        message.includes('already exists') ||
+        message.includes('SQL logic error')
+      ) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+}
+
 function getDatabaseUrl() {
   return process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL;
 }
@@ -90,6 +114,8 @@ async function init() {
           throw error;
         }
       }
+
+      await ensureOptionalColumns(currentClient);
     })();
   }
 

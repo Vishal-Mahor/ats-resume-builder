@@ -1,7 +1,8 @@
 // ============================================================
 // API Client — lib/api.ts
 // ============================================================
-const TOKEN_STORAGE_KEY = 'ats_token';
+const ACCESS_TOKEN_STORAGE_KEY = 'ats_access_token';
+let refreshPromise: Promise<string | null> | null = null;
 
 function getApiBase() {
   return '';
@@ -11,33 +12,49 @@ export function setAuthToken(token: string | null) {
   if (typeof window === 'undefined') return;
 
   if (token) {
-    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
   } else {
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
   }
+}
+
+export async function refreshAuthToken(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const res = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+      });
+
+      if (!res.ok) {
+        setAuthToken(null);
+        return null;
+      }
+
+      const data = await res.json();
+      const nextToken = typeof data?.accessToken === 'string' ? data.accessToken : null;
+      setAuthToken(nextToken);
+      return nextToken;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
 }
 
 async function getToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
 
-  const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-  if (storedToken) return storedToken;
-
-  try {
-    const res = await fetch('/api/auth/session', { cache: 'no-store' });
-    if (!res.ok) return null;
-
-    const session = await res.json();
-    const sessionToken = typeof session?.backendToken === 'string' ? session.backendToken : null;
-
-    if (sessionToken) {
-      localStorage.setItem(TOKEN_STORAGE_KEY, sessionToken);
-    }
-
-    return sessionToken;
-  } catch {
-    return null;
+  const storedToken = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+  if (storedToken) {
+    return storedToken;
   }
+
+  return refreshAuthToken();
 }
 
 function getFileNameFromHeaders(headers: Headers, fallback: string) {
@@ -77,17 +94,28 @@ async function downloadFile(path: string, fallbackName: string) {
 
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryOnAuthFailure = true
 ): Promise<T> {
   const token = await getToken();
   const res = await fetch(`${getApiBase()}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
   });
+
+  if (res.status === 401 && retryOnAuthFailure) {
+    const refreshedToken = await refreshAuthToken();
+
+    if (refreshedToken) {
+      return request<T>(path, options, false);
+    }
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Request failed' }));
     throw new Error(err.error || `HTTP ${res.status}`);
@@ -100,16 +128,21 @@ async function request<T>(
 export const api = {
   auth: {
     login:    (email: string, password: string) =>
-      request<{ token: string; user: User }>('/api/auth/login', {
+      request<{ accessToken: string; user: User }>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       }),
     register: (email: string, password: string, name: string) =>
-      request<{ token: string; user: User }>('/api/auth/register', {
+      request<{ accessToken: string; user: User }>('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({ email, password, name }),
       }),
     me: () => request<User>('/api/auth/me'),
+    logout: () => request<{ success: boolean }>('/api/auth/logout', { method: 'POST' }, false),
+  },
+
+  dashboard: {
+    summary: () => request<DashboardSummary>('/api/dashboard/summary'),
   },
 
   // ─── Profile ────────────────────────────────────────────
@@ -132,6 +165,11 @@ export const api = {
   },
 
   // ─── Generate ───────────────────────────────────────────
+  jdAnalysis: (payload: JDAnalysisInput) =>
+    request<JDAnalysisResult>('/api/jd-analysis', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   generate: (payload: GeneratePayload) =>
     request<GenerateResult>('/api/generate-resume', {
       method: 'POST',
@@ -169,7 +207,7 @@ export interface Education {
 
 export interface ResumeSummary {
   id: string; company_name: string; job_title: string; ats_score: number;
-  status: string; created_at: string;
+  source_platform?: string; status: string; created_at: string;
 }
 
 export interface ResumeStats {
@@ -182,6 +220,35 @@ export interface Resume extends ResumeSummary {
   cover_letter: string; cover_letter_tone: string;
   matched_keywords: string[]; missing_keywords: string[];
   suggestions: Suggestion[];
+}
+
+export interface DashboardSummary {
+  stats: Array<{
+    label: string;
+    value: number;
+    delta: string;
+    helper: string;
+    trend: 'up' | 'steady' | 'down';
+  }>;
+  quickActions: Array<{
+    id: string;
+    title: string;
+    description: string;
+    href: string;
+  }>;
+  recentResumes: ResumeSummary[];
+  atsInsights: {
+    averageKeywordMatch: number;
+    topMissingKeywords: string[];
+    recommendations: Suggestion[];
+    profileCompletion: number;
+    profileStrength: string;
+  };
+  trend: Array<{
+    label: string;
+    score: number;
+  }>;
+  nextSteps: string[];
 }
 
 export interface ResumeContent {
@@ -201,11 +268,38 @@ export interface Suggestion {
 
 export interface GeneratePayload {
   company_name: string; job_title: string;
+  source_platform?: 'linkedin' | 'indeed' | 'naukri' | 'manual';
   job_description: string; cover_letter_tone: 'formal' | 'modern' | 'aggressive';
 }
 
 export interface GenerateResult {
   resume_id: string; resume_content: ResumeContent; cover_letter: string;
+  source_platform?: string;
   ats_score: number; matched_keywords: string[]; missing_keywords: string[];
   suggestions: Suggestion[]; created_at: string;
+}
+
+export interface JDAnalysisInput {
+  job_description: string;
+}
+
+export interface JDAnalysisResult {
+  extractedRole: string;
+  seniorityLevel: string;
+  domain: string;
+  yearsExperience: number;
+  requiredSkills: string[];
+  preferredSkills: string[];
+  keywords: string[];
+  techStack: string[];
+  responsibilities: string[];
+  matchedSkills: string[];
+  missingSkills: string[];
+  matchedKeywords: string[];
+  missingKeywords: string[];
+  strengths: string[];
+  gaps: string[];
+  suggestions: Suggestion[];
+  atsScore: number;
+  profileMatchLabel: string;
 }

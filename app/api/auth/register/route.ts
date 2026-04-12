@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { registerWithEmail } from '@/lib/server/auth-service';
+import { setRefreshTokenCookie } from '@/lib/server/auth-cookie';
 import { handleRouteError } from '@/lib/server/http';
 
 export const runtime = 'nodejs';
@@ -15,7 +16,14 @@ export async function POST(request: Request) {
   try {
     const body = registerSchema.parse(await request.json());
     const result = await registerWithEmail(body);
-    return NextResponse.json(result, { status: 201 });
+    await setRefreshTokenCookie(result.refreshToken);
+    return NextResponse.json(
+      {
+        accessToken: result.accessToken,
+        user: result.user,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     return handleRouteError(error);
   }

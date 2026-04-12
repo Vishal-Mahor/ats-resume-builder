@@ -17,6 +17,7 @@ export const runtime = 'nodejs';
 const generateSchema = z.object({
   company_name: z.string().min(1).max(200),
   job_title: z.string().min(1).max(200),
+  source_platform: z.enum(['linkedin', 'indeed', 'naukri', 'manual']).default('manual'),
   job_description: z.string().min(50).max(8000),
   cover_letter_tone: z.enum(['formal', 'modern', 'aggressive']).default('formal'),
 });
@@ -57,14 +58,15 @@ export async function POST(request: Request) {
       rows: [resume],
     } = await db.query(
       `INSERT INTO resumes
-         (user_id, company_name, job_title, resume_content, cover_letter, cover_letter_tone,
+         (user_id, company_name, job_title, source_platform, resume_content, cover_letter, cover_letter_tone,
           ats_score, matched_keywords, missing_keywords, suggestions)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING id, created_at`,
       [
         userId,
         body.company_name,
         body.job_title,
+        body.source_platform,
         JSON.stringify(resumeContent),
         coverLetter,
         body.cover_letter_tone,
@@ -80,6 +82,7 @@ export async function POST(request: Request) {
         resume_id: resume.id,
         resume_content: resumeContent,
         cover_letter: coverLetter,
+        source_platform: body.source_platform,
         ats_score: matchResult.ats_score,
         matched_keywords: matchResult.matched_keywords,
         missing_keywords: matchResult.missing_keywords,

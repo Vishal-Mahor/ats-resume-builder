@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { getSession, signIn, useSession } from 'next-auth/react';
+import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { api, setAuthToken } from '@/lib/api';
@@ -18,20 +18,38 @@ type FormErrors = {
 
 export default function SignInPage() {
   const router = useRouter();
-  const { status } = useSession();
   const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<'google' | 'github' | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
 
   useEffect(() => {
-    if (status === 'authenticated') {
-      router.replace('/dashboard');
-    }
-  }, [router, status]);
+    let active = true;
+
+    api.auth
+      .me()
+      .then(() => {
+        if (!active) return;
+        router.replace('/dashboard');
+      })
+      .catch(() => {
+        if (!active) return;
+        setAuthToken(null);
+      })
+      .finally(() => {
+        if (active) {
+          setCheckingAuth(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   const passwordHint =
     mode === 'register'
@@ -87,23 +105,13 @@ export default function SignInPage() {
     setLoading(true);
 
     try {
-      if (mode === 'register') {
-        await api.auth.register(email.trim(), password, email.split('@')[0]);
-        toast.success('Account created. Signing you in...');
-      }
+      const authResult =
+        mode === 'register'
+          ? await api.auth.register(email.trim(), password, email.split('@')[0])
+          : await api.auth.login(email.trim(), password);
 
-      const result = await signIn('credentials', {
-        email: email.trim(),
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        throw new Error(mode === 'signin' ? 'Invalid email or password.' : 'Sign-in failed after registration.');
-      }
-
-      const session = await getSession();
-      setAuthToken(session?.backendToken ?? null);
+      setAuthToken(authResult.accessToken);
+      toast.success(mode === 'register' ? 'Account created successfully.' : 'Signed in successfully.');
       router.push('/dashboard');
       router.refresh();
     } catch (error) {
@@ -116,7 +124,15 @@ export default function SignInPage() {
 
   async function handleOAuth(provider: 'google' | 'github') {
     setSocialLoading(provider);
-    await signIn(provider, { callbackUrl: '/dashboard' });
+    await signIn(provider, { callbackUrl: '/auth/oauth-success' });
+  }
+
+  if (checkingAuth) {
+    return (
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#030711] text-white">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-cyan-300" />
+      </main>
+    );
   }
 
   return (
