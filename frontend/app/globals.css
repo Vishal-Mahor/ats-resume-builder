@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-brand: #1a6b4a;
+    --color-brand-light: #e6f3ee;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background: #f7f6f3;
+    color: #0f0f0f;
+  }
+}
+
+@layer components {
+  /* ATS resume paper styles (used inside preview + PDF) */
+  .resume-paper {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 11pt;
+    color: #111;
+    line-height: 1.45;
+  }
+
+  .resume-section-title {
+    font-family: Arial, sans-serif;
+    font-size: 9.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    border-bottom: 0.75pt solid #999;
+    padding-bottom: 2px;
+    margin: 12px 0 5px;
+  }
+
+  /* Wizard step animations */
+  .step-enter {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  .step-enter-active {
+    opacity: 1;
+    transform: translateX(0);
+    transition: all 0.2s ease;
+  }
+
+  /* Tag input pill */
+  .skill-tag {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium;
+  }
+
+  /* Score chip colors */
+  .score-high   { @apply bg-emerald-50 text-emerald-700; }
+  .score-medium { @apply bg-amber-50 text-amber-700; }
+  .score-low    { @apply bg-red-50 text-red-700; }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d0cfc7; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #b4b2a9; }
