@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   try {
     const userId = requireAuthUserId(request);
     const { rows } = await db.query(
-      `SELECT id, company_name, job_title, source_platform, ats_score, status, created_at, updated_at
+      `SELECT id, company_name, job_title, source_platform, template_id, ats_score, status, created_at, updated_at
        FROM resumes WHERE user_id=$1 ORDER BY created_at DESC`,
       [userId]
     );

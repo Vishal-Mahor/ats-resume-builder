@@ -150,6 +150,44 @@ export const api = {
     get:    () => request<FullProfile>('/api/profile'),
     update: (data: Partial<FullProfile>) =>
       request<FullProfile>('/api/profile', { method: 'PUT', body: JSON.stringify(data) }),
+    sendEmailOtp: () => request<{ sent: boolean }>('/api/profile/send-email-otp', { method: 'POST' }),
+    confirmEmailOtp: (code: string) =>
+      request<FullProfile>('/api/profile/confirm-email-otp', { method: 'POST', body: JSON.stringify({ code }) }),
+    sendPhoneOtp: () => request<{ sent: boolean }>('/api/profile/send-phone-otp', { method: 'POST' }),
+    confirmPhoneOtp: (code: string) =>
+      request<FullProfile>('/api/profile/confirm-phone-otp', { method: 'POST', body: JSON.stringify({ code }) }),
+  },
+
+  settings: {
+    get: () => request<UserSettings>('/api/settings'),
+    update: (data: UserSettings) =>
+      request<UserSettings>('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
+  },
+
+  templates: {
+    list: () => request<ResumeTemplate[]>('/api/templates'),
+  },
+
+  support: {
+    submit: (data: SupportRequestInput) =>
+      request<{ sent: boolean }>('/api/support', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  },
+
+  notifications: {
+    list: (limit = 20) => request<NotificationListResponse>(`/api/notifications?limit=${limit}`),
+    markRead: (notificationId: string) =>
+      request<NotificationListResponse>('/api/notifications', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'mark-read', notificationId }),
+      }),
+    markAllRead: () =>
+      request<NotificationListResponse>('/api/notifications', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'mark-all-read' }),
+      }),
   },
 
   // ─── Resumes ────────────────────────────────────────────
@@ -183,31 +221,66 @@ export interface User {
 }
 
 export interface FullProfile {
+  name?: string;
+  email?: string;
+  email_verified_at?: string | null;
   phone?: string; location?: string; linkedin?: string; github?: string;
   website?: string; summary?: string;
+  phone_verified_at?: string | null;
+  location_verified_at?: string | null;
+  achievements?: string[];
+  languages?: string[];
+  hobbies?: string[];
+  technicalSkills?: string[];
+  softSkills?: string[];
   skills: string[];
   experiences: Experience[];
   projects: Project[];
   education: Education[];
 }
 
+export interface UserSettings {
+  workspaceName: string;
+  defaultSourcePlatform: 'linkedin' | 'indeed' | 'naukri' | 'manual';
+  defaultRegion: string;
+  verificationRequirement: 'optional-before-generation' | 'required-before-export' | 'required-before-generation';
+  notifications: {
+    productUpdates: boolean;
+    resumeReady: boolean;
+    atsAlerts: boolean;
+    verificationAlerts: boolean;
+  };
+  exports: {
+    defaultTemplate: string;
+    fileStyle: 'role-company-date' | 'company-role' | 'candidate-role';
+    includeCoverLetter: boolean;
+  };
+  privacy: {
+    keepResumeHistory: boolean;
+    allowAiReuse: boolean;
+    requireVerificationBeforeExport: boolean;
+  };
+}
+
 export interface Experience {
   id?: string; job_title: string; company: string; location?: string;
-  start_date: string; end_date: string; is_current: boolean; bullets: string[];
+  start_date: string; end_date?: string; is_current: boolean; bullets: string[];
+  sort_order?: number;
 }
 
 export interface Project {
-  id?: string; name: string; tech_stack: string; url?: string; description: string;
+  id?: string; name: string; tech_stack?: string; url?: string; description: string;
+  sort_order?: number;
 }
 
 export interface Education {
   id?: string; degree: string; institution: string; field?: string;
-  year: string; gpa?: string;
+  year: string; gpa?: string; sort_order?: number;
 }
 
 export interface ResumeSummary {
   id: string; company_name: string; job_title: string; ats_score: number;
-  source_platform?: string; status: string; created_at: string;
+  source_platform?: string; template_id?: string; status: string; created_at: string;
 }
 
 export interface ResumeStats {
@@ -223,6 +296,7 @@ export interface Resume extends ResumeSummary {
 }
 
 export interface DashboardSummary {
+  templateCount: number;
   stats: Array<{
     label: string;
     value: number;
@@ -256,10 +330,49 @@ export interface ResumeContent {
   skills: { technical: string[]; tools: string[]; other: string[] };
   experience: Array<{
     job_title: string; company: string; location?: string;
-    start_date: string; end_date: string; bullets: string[];
+    start_date: string; end_date?: string; is_current?: boolean; bullets: string[];
   }>;
   projects: Array<{ name: string; tech_stack: string; description: string; url?: string }>;
   education: Array<{ degree: string; institution: string; year: string; gpa?: string }>;
+}
+
+export interface ResumeTemplate {
+  id: string;
+  name: string;
+  tag: string;
+  usage: string;
+  description: string;
+  note: string;
+  strengths: string[];
+}
+
+export interface NotificationItem {
+  id: string;
+  type: 'product-update' | 'resume-ready' | 'ats-alert' | 'verification-alert';
+  title: string;
+  message: string;
+  metadata?: Record<string, unknown>;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationListResponse {
+  items: NotificationItem[];
+  unreadCount: number;
+}
+
+export type SupportCategory =
+  | 'feature-request'
+  | 'suggestion'
+  | 'bug-report'
+  | 'billing'
+  | 'account'
+  | 'other';
+
+export interface SupportRequestInput {
+  category: SupportCategory;
+  subject: string;
+  message: string;
 }
 
 export interface Suggestion {
@@ -268,6 +381,7 @@ export interface Suggestion {
 
 export interface GeneratePayload {
   company_name: string; job_title: string;
+  template_id: string;
   source_platform?: 'linkedin' | 'indeed' | 'naukri' | 'manual';
   job_description: string; cover_letter_tone: 'formal' | 'modern' | 'aggressive';
 }

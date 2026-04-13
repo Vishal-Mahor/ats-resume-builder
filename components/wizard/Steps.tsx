@@ -115,10 +115,10 @@ export function StepExperience({ data, update }: { data: WizardData; update: (p:
             <div><Label>Company</Label><Input placeholder="TechCorp Inc." value={exp.company} onChange={e => updateExp(i, 'company', e.target.value)} /></div>
           </div>
           <div className="grid grid-cols-3 gap-3 mb-3">
-            <div><Label>Start Date</Label><Input placeholder="Jan 2022" value={exp.start_date} onChange={e => updateExp(i, 'start_date', e.target.value)} /></div>
-            <div><Label>End Date</Label><Input placeholder="Present" value={exp.end_date} disabled={exp.is_current} onChange={e => updateExp(i, 'end_date', e.target.value)} /></div>
+            <div><Label>Start Date</Label><Input type="date" value={toDateInputValue(exp.start_date)} onClick={e => openNativeDatePicker(e.currentTarget)} onKeyDown={e => { if (e.key !== 'Tab') e.preventDefault(); }} onPaste={e => e.preventDefault()} onChange={e => updateExp(i, 'start_date', e.target.value)} /></div>
+            <div><Label>End Date</Label><Input type="date" value={toDateInputValue(exp.end_date)} onClick={e => openNativeDatePicker(e.currentTarget)} onKeyDown={e => { if (e.key !== 'Tab') e.preventDefault(); }} onPaste={e => e.preventDefault()} disabled={exp.is_current} onChange={e => updateExp(i, 'end_date', e.target.value)} /></div>
             <div className="flex items-end pb-2.5 gap-2">
-              <input type="checkbox" checked={exp.is_current} onChange={e => { updateExp(i, 'is_current', e.target.checked); if (e.target.checked) updateExp(i, 'end_date', 'Present'); }} className="mt-0.5" />
+              <input type="checkbox" checked={exp.is_current} onChange={e => { const checked = e.target.checked; updateExp(i, 'is_current', checked); if (checked) updateExp(i, 'end_date', getTodayDateValue()); }} className="mt-0.5" />
               <Label>Current</Label>
             </div>
           </div>
@@ -312,3 +312,43 @@ export function StepCoverLetter({ data, update }: { data: WizardData; update: (p
 
 // Default export for all steps (individual named exports used above)
 export default { StepJobInfo, StepExperience, StepSkills, StepProjects, StepCoverLetter };
+
+function toDateInputValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (/^\d{4}-\d{2}$/.test(trimmed)) {
+    return `${trimmed}-01`;
+  }
+
+  const parsed = Date.parse(`1 ${trimmed}`);
+  if (!Number.isNaN(parsed)) {
+    const date = new Date(parsed);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    return `${year}-${month}-01`;
+  }
+
+  return '';
+}
+
+function openNativeDatePicker(input: HTMLInputElement) {
+  const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
+  if (pickerInput.showPicker) {
+    pickerInput.showPicker();
+  }
+}
+
+function getTodayDateValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}

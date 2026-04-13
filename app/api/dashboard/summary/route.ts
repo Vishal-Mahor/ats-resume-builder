@@ -3,6 +3,7 @@ import { db } from '@/lib/server/db';
 import { requireAuthUserId } from '@/lib/server/auth-token';
 import { handleRouteError } from '@/lib/server/http';
 import { getFullProfile } from '@/lib/server/profile-service';
+import { listResumeTemplates } from '@/lib/server/template-service';
 
 export const runtime = 'nodejs';
 
@@ -22,7 +23,7 @@ type ResumeRow = {
 export async function GET(request: Request) {
   try {
     const userId = requireAuthUserId(request);
-    const [profile, recentResumesResult, allResumesResult] = await Promise.all([
+    const [profile, recentResumesResult, allResumesResult, templates] = await Promise.all([
       getFullProfile(userId),
       db.query<ResumeRow>(
         `SELECT id, company_name, job_title, source_platform, ats_score, status, created_at
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
          FROM resumes WHERE user_id=$1 ORDER BY created_at DESC LIMIT 18`,
         [userId]
       ),
+      listResumeTemplates(),
     ]);
 
     const resumes = allResumesResult.rows;
@@ -114,6 +116,7 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({
+      templateCount: templates.length,
       stats,
       quickActions: [
         {
@@ -184,23 +187,28 @@ function countTopTerms(values: string[], limit: number) {
 }
 
 function calculateProfileCompletion(profile: {
+  name?: string;
+  email?: string;
   phone?: string;
   location?: string;
   linkedin?: string;
   github?: string;
   website?: string;
   summary?: string;
+  technicalSkills?: string[];
   skills?: string[];
   experiences?: unknown[];
   projects?: unknown[];
   education?: unknown[];
 }) {
   const checks = [
-    Boolean(profile.phone),
-    Boolean(profile.location),
-    Boolean(profile.linkedin),
-    Boolean(profile.summary),
-    Boolean(profile.skills?.length),
+    hasText(profile.name),
+    hasText(profile.email),
+    hasText(profile.phone),
+    hasText(profile.location),
+    hasText(profile.linkedin),
+    hasText(profile.summary),
+    Boolean(profile.technicalSkills?.length || profile.skills?.length),
     Boolean(profile.experiences?.length),
     Boolean(profile.projects?.length),
     Boolean(profile.education?.length),
@@ -208,6 +216,10 @@ function calculateProfileCompletion(profile: {
 
   const completed = checks.filter(Boolean).length;
   return Math.round((completed / checks.length) * 100);
+}
+
+function hasText(value?: string) {
+  return Boolean(value?.trim());
 }
 
 function countPlatforms(resumes: Array<{ source_platform?: string }>) {

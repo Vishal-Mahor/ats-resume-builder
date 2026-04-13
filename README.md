@@ -71,6 +71,23 @@ Edit `.env.local` with your credentials (see `.env.example` for all variables).
 npm run db:migrate
 ```
 
+If you already have an existing database, run the profile extension SQL in:
+
+`database/profile-schema-update.sql`
+
+This adds:
+
+- `users.email_verified_at`
+- `profiles.phone_verified_at`
+- `profiles.location_verified_at`
+- `profiles.achievements`
+- `profiles.languages`
+- `profiles.hobbies`
+- `verification_codes`
+- `resume_templates`
+- `resumes.template_id`
+- `user_settings`
+
 ### 4. Set up OAuth (optional but recommended)
 
 **Google:**
@@ -102,6 +119,9 @@ npm run dev
 | GET | `/api/auth/me` | ✓ | Current user |
 | GET | `/api/profile` | ✓ | Full profile + experience |
 | PUT | `/api/profile` | ✓ | Update profile |
+| GET | `/api/settings` | ✓ | Get the signed-in user's saved settings |
+| PUT | `/api/settings` | ✓ | Save the signed-in user's settings |
+| GET | `/api/templates` | ✓ | List active resume templates from DB |
 | POST | `/api/generate-resume` | ✓ | AI resume generation |
 | GET | `/api/resumes` | ✓ | List all resumes |
 | GET | `/api/resumes/stats` | ✓ | Dashboard stats |
@@ -110,6 +130,83 @@ npm run dev
 | DELETE | `/api/resumes/:id` | ✓ | Delete resume |
 | GET | `/api/resumes/:id/pdf` | ✓ | Download resume PDF |
 | GET | `/api/resumes/:id/cover-pdf` | ✓ | Download cover letter PDF |
+
+## 👤 Profile Model
+
+The profile page now supports:
+
+- Name
+- Email
+- Phone
+- Location
+- LinkedIn
+- GitHub
+- Website / portfolio
+- Professional summary
+- Technical skills
+- Soft skills
+- Education
+- Projects
+- Work experience
+- Languages
+- Hobbies
+- Achievements
+
+Verification metadata currently stored in the schema:
+
+- `users.email_verified_at`
+- `profiles.phone_verified_at`
+- `profiles.location_verified_at`
+
+Current behavior:
+
+- Email and phone verification use OTPs from the profile page inbox.
+- Email changes reset `email_verified_at` until a new OTP is confirmed.
+- Phone changes reset `phone_verified_at` until a new OTP is confirmed.
+- Location verification timestamp is still reset on change, but no separate OTP flow is wired for location yet.
+
+Environment variables for verification:
+
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM_EMAIL`
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_FROM_PHONE`
+
+## 🧩 Template Source Of Truth
+
+Resume templates are now stored in the database and should be read from there across the product.
+
+- Table: `resume_templates`
+- Resume linkage: `resumes.template_id`
+- API source: `GET /api/templates`
+- Current app behavior:
+  - the default templates are auto-seeded into `resume_templates`
+  - the templates page reads from the DB-backed API
+  - the new resume page reads template options from the DB-backed API
+  - generated resumes now store the chosen `template_id`
+  - dashboard and settings template counts now come from DB-backed template data
+
+## ⚙️ User Settings
+
+Settings are now stored per user, not globally.
+
+- Table: `user_settings`
+- Keying model: one settings row per `user_id`
+- API source: `GET /api/settings`
+- API update: `PUT /api/settings`
+- Saved groups:
+  - general workspace defaults
+  - notification preferences
+  - export preferences
+  - privacy preferences
+- Current usage:
+  - the settings page loads and saves each signed-in user's own settings
+  - the new resume page uses the saved default source platform and default template
 
 ---
 

@@ -1,21 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { api, type FullProfile, type JDAnalysisResult } from '@/lib/api';
+import { api, type FullProfile, type JDAnalysisResult, type ResumeTemplate } from '@/lib/api';
 
 const SOURCE_OPTIONS = [
   { value: 'linkedin', label: 'LinkedIn' },
   { value: 'indeed', label: 'Indeed' },
   { value: 'naukri', label: 'Naukri' },
   { value: 'manual', label: 'Manual' },
-] as const;
-
-const TEMPLATE_OPTIONS = [
-  { id: 'clarity', name: 'Clarity', note: 'Balanced, ATS-friendly structure' },
-  { id: 'operator', name: 'Operator', note: 'Sharper emphasis on metrics and impact' },
-  { id: 'signal', name: 'Signal', note: 'Clean modern style for product and tech roles' },
 ] as const;
 
 export interface WizardData {
@@ -40,7 +34,9 @@ export interface WizardData {
 
 export default function NewResumePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [profile, setProfile] = useState<FullProfile | null>(null);
+  const [templates, setTemplates] = useState<ResumeTemplate[]>([]);
   const [analysis, setAnalysis] = useState<JDAnalysisResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -54,11 +50,36 @@ export default function NewResumePage() {
   });
 
   useEffect(() => {
-    api.profile
-      .get()
-      .then(setProfile)
-      .catch(() => toast.error('Failed to load your saved profile.'));
-  }, []);
+    Promise.all([api.profile.get(), api.templates.list(), api.settings.get()])
+      .then(([profileResult, templateResult, settingsResult]) => {
+        setProfile(profileResult);
+        setTemplates(templateResult);
+        const requestedTemplate = searchParams.get('template');
+        const fallbackTemplate =
+          templateResult.find((template) => template.id === settingsResult.exports.defaultTemplate)?.id ??
+          templateResult[0]?.id ??
+          'clarity';
+        const nextTemplate = templateResult.some((template) => template.id === requestedTemplate)
+          ? requestedTemplate!
+          : fallbackTemplate;
+        setForm((current) => ({
+          ...current,
+          source_platform: settingsResult.defaultSourcePlatform,
+          template: nextTemplate,
+        }));
+      })
+      .catch(() => toast.error('Failed to load your workspace setup.'));
+  }, [searchParams]);
+
+  const templateOptions = useMemo(
+    () =>
+      templates.map((template) => ({
+        id: template.id,
+        name: template.name,
+        note: template.note,
+      })),
+    [templates]
+  );
 
   const profileSummary = useMemo(() => {
     if (!profile) {
@@ -118,6 +139,7 @@ export default function NewResumePage() {
       const result = await api.generate({
         company_name: form.company_name.trim(),
         job_title: form.job_title.trim(),
+        template_id: form.template,
         job_description: form.job_description.trim(),
         source_platform: form.source_platform,
         cover_letter_tone: form.cover_letter_tone,
@@ -182,7 +204,7 @@ export default function NewResumePage() {
                 onChange={(event) => setForm((current) => ({ ...current, template: event.target.value }))}
                 className="input-shell"
               >
-                {TEMPLATE_OPTIONS.map((option) => (
+                {templateOptions.map((option) => (
                   <option key={option.id} value={option.id}>
                     {option.name}
                   </option>
@@ -242,10 +264,10 @@ export default function NewResumePage() {
             <Field label="Selected template preview">
               <div className="app-panel-muted p-4">
                 <div className="text-lg font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
-                  {TEMPLATE_OPTIONS.find((option) => option.id === form.template)?.name}
+                  {templateOptions.find((option) => option.id === form.template)?.name}
                 </div>
                 <div className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                  {TEMPLATE_OPTIONS.find((option) => option.id === form.template)?.note}
+                  {templateOptions.find((option) => option.id === form.template)?.note}
                 </div>
               </div>
             </Field>

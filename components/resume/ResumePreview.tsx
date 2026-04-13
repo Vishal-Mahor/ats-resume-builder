@@ -66,7 +66,7 @@ export default function ResumePreview({ meta, content }: ResumePreviewProps) {
             <div key={i} style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span style={{ fontFamily: 'Arial', fontSize: '10.5pt', fontWeight: 700 }}>{exp.job_title}</span>
-                <span style={{ fontSize: '9.5pt', color: '#444', whiteSpace: 'nowrap', marginLeft: 8 }}>{exp.start_date} – {exp.end_date}</span>
+                <span style={{ fontSize: '9.5pt', color: '#444', whiteSpace: 'nowrap', marginLeft: 8 }}>{formatDateRange(exp.start_date, exp.end_date, exp.is_current)}</span>
               </div>
               <div style={{ fontSize: '10pt', color: '#444', marginBottom: 3 }}>
                 {exp.company}{exp.location ? `, ${exp.location}` : ''}
@@ -135,4 +135,40 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
+}
+
+function formatDateRange(startDate?: string, endDate?: string, isCurrent?: boolean) {
+  const start = formatMonthValue(startDate);
+  const end = isCurrent ? 'Present' : formatMonthValue(endDate);
+  return `${start || 'N/A'} - ${end || 'N/A'}`;
+}
+
+function formatMonthValue(value?: string) {
+  if (!value) {
+    return '';
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  if (/^\d{4}-\d{2}$/.test(trimmed)) {
+    const [year, month] = trimmed.split('-');
+    return new Date(`${year}-${month}-01T00:00:00Z`).toLocaleDateString('en-US', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return new Date(`${trimmed}T00:00:00Z`).toLocaleDateString('en-US', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  }
+
+  return trimmed;
 }

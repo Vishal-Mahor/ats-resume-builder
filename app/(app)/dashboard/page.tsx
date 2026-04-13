@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { api, type DashboardSummary } from '@/lib/api';
 
-const TEMPLATE_COUNT = 3;
 const WORKSPACE_COUNT = 1;
 
 export default function DashboardPage() {
@@ -22,6 +21,14 @@ export default function DashboardPage() {
 
   const recommendationCount = summary?.atsInsights.recommendations.length ?? 0;
   const nextSteps = useMemo(() => summary?.nextSteps ?? [], [summary]);
+  const readinessPercent = useMemo(
+    () => clampProgress(summary?.atsInsights.profileCompletion ?? 0),
+    [summary?.atsInsights.profileCompletion]
+  );
+  const readinessColor = useMemo(
+    () => getProgressColor(readinessPercent),
+    [readinessPercent]
+  );
 
   if (loading) {
     return (
@@ -49,7 +56,7 @@ export default function DashboardPage() {
   const overviewCards = [
     {
       label: 'Templates available',
-      value: TEMPLATE_COUNT,
+      value: summary.templateCount,
       helper: 'Ready-to-use ATS-friendly layouts',
     },
     {
@@ -85,12 +92,21 @@ export default function DashboardPage() {
 
             <div className="app-panel-muted min-w-[260px] p-5">
               <div className="app-caption">Profile readiness</div>
-              <div className="app-stat-value mt-3">{summary.atsInsights.profileCompletion}%</div>
+              <div className="app-stat-value mt-3" style={{ color: readinessColor }}>{readinessPercent}%</div>
               <div className="mt-3 app-chip">{summary.atsInsights.profileStrength}</div>
-              <div className="mt-5 h-2.5 overflow-hidden rounded-full bg-white/6">
+              <div className="mt-5 h-2.5 overflow-hidden rounded-full border border-white/12 bg-white/12">
                 <div
                   className="h-full rounded-full transition-all duration-700"
-                  style={{ background: 'var(--accent)', width: `${summary.atsInsights.profileCompletion}%` }}
+                  style={{ background: readinessColor, width: '100%', transform: `scaleX(${readinessPercent / 100})`, transformOrigin: 'left center' }}
+                />
+              </div>
+              <div className="relative mt-2 h-7 text-[10px] font-semibold text-[var(--text-dim)]">
+                <span className="absolute left-0">0%</span>
+                <span className="absolute right-0">100%</span>
+                <span className="absolute left-[85%] top-0 -translate-x-full whitespace-nowrap">90%</span>
+                <span
+                  className="absolute left-[90%] top-4 h-2 w-px bg-[var(--text-dim)]/60"
+                  aria-hidden="true"
                 />
               </div>
             </div>
@@ -170,7 +186,7 @@ export default function DashboardPage() {
               </h3>
               <div className="mt-5 space-y-3">
                 {[
-                  ['Templates available', `${TEMPLATE_COUNT}`],
+                  ['Templates available', `${summary.templateCount}`],
                   ['Resumes created', `${summary.stats[0]?.value ?? 0}`],
                   ['Average keyword match', `${summary.atsInsights.averageKeywordMatch}%`],
                   ['Priority recommendations', `${recommendationCount}`],
@@ -236,4 +252,16 @@ function TrendBadge({ trend }: { trend: 'up' | 'steady' | 'down' }) {
     { label: 'Stable', className: 'app-chip' };
 
   return <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${content.className}`}>{content.label}</span>;
+}
+
+function getProgressColor(progress: number) {
+  const clamped = Math.min(100, Math.max(0, progress));
+  if (clamped < 30) return '#ef4444';
+  if (clamped < 60) return '#f97316';
+  if (clamped < 100) return '#eab308';
+  return '#22c55e';
+}
+
+function clampProgress(progress: number) {
+  return Math.min(100, Math.max(0, Number.isFinite(progress) ? progress : 0));
 }

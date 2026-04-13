@@ -112,18 +112,23 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function Panel({ title, items, tone = 'slate' }: { title: string; items: string[]; tone?: 'slate' | 'amber' | 'rose' }) {
-  const toneClass = tone === 'amber' ? 'app-score-medium' : tone === 'rose' ? 'app-score-low' : 'app-chip';
+  const toneClass =
+    tone === 'amber'
+      ? 'border border-amber-300/40 bg-amber-500/10 text-amber-100'
+      : tone === 'rose'
+        ? 'border border-rose-300/40 bg-rose-500/10 text-rose-100'
+        : 'border border-white/10 bg-white/[0.04] text-[var(--text-secondary)]';
 
   return (
     <section className="app-panel p-6">
       <h3 className="app-subheading">
         {title}
       </h3>
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 space-y-3">
         {items.length ? items.map((item) => (
-          <span key={item} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${toneClass}`}>
+          <div key={item} className={`rounded-xl px-4 py-3 text-sm leading-7 ${toneClass}`}>
             {item}
-          </span>
+          </div>
         )) : <span className="text-sm text-slate-500">Nothing to show yet.</span>}
       </div>
     </section>

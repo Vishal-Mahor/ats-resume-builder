@@ -25,9 +25,9 @@ export async function registerWithEmail(input: {
   const {
     rows: [user],
   } = await db.query<{ id: string }>(
-    `INSERT INTO users (email, name, password_hash, provider)
-     VALUES ($1,$2,$3,'email') RETURNING id`,
-    [input.email, input.name, hash]
+    `INSERT INTO users (email, name, password_hash, provider, email_verified_at)
+     VALUES ($1,$2,$3,'email',$4) RETURNING id`,
+    [input.email, input.name, hash, new Date().toISOString()]
   );
 
   await db.query('INSERT INTO profiles (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [user.id]);
@@ -83,12 +83,13 @@ export async function upsertOAuthUser(input: {
   const {
     rows: [user],
   } = await db.query<{ id: string; name: string; email: string; avatar_url?: string; plan: string }>(
-    `INSERT INTO users (email, name, avatar_url, provider, provider_id)
-     VALUES ($1,$2,$3,$4,$5)
+    `INSERT INTO users (email, name, avatar_url, provider, provider_id, email_verified_at)
+     VALUES ($1,$2,$3,$4,$5,$6)
      ON CONFLICT (email) DO UPDATE
        SET provider=$4,
            provider_id=$5,
            avatar_url=COALESCE($3, users.avatar_url),
+           email_verified_at=COALESCE(users.email_verified_at, $6),
            updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
      RETURNING id, email, name, avatar_url, plan`,
     [
@@ -97,6 +98,7 @@ export async function upsertOAuthUser(input: {
       input.avatarUrl ?? null,
       input.provider,
       input.providerId,
+      new Date().toISOString(),
     ]
   );
 

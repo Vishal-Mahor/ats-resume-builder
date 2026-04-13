@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, setAuthToken, type User } from '@/lib/api';
+import { api, setAuthToken, type NotificationItem, type User } from '@/lib/api';
 
 type NavItem = {
   href: string;
@@ -19,6 +19,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/profile', label: 'My Profile', icon: ProfileIcon },
   { href: '/templates', label: 'Templates', icon: TemplateIcon },
   { href: '/analytics', label: 'Analytics', icon: ChartIcon },
+  { href: '/support', label: 'Support', icon: SupportIcon },
   { href: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
@@ -26,8 +27,7 @@ const PROFILE_MENU = [
   { href: '/profile', label: 'My Profile' },
   { href: '/settings', label: 'Settings' },
   { href: '/settings?tab=billing', label: 'Billing / Subscription' },
-  { href: '/settings?tab=terms', label: 'Terms & Conditions' },
-  { href: '/settings?tab=support', label: 'Help / Support' },
+  { href: '/support', label: 'Help / Support' },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -35,20 +35,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
   const [user, setUser] = useState<User | null>(null);
+  const [workspaceName, setWorkspaceName] = useState('ATS Resume Builder');
   const [collapsed, setCollapsed] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let active = true;
 
     api.auth
       .me()
-      .then((currentUser) => {
+      .then(async (currentUser) => {
         if (!active) return;
         setUser(currentUser);
         setStatus('authenticated');
+
+        try {
+          const settings = await api.settings.get();
+          if (!active) return;
+          setWorkspaceName(settings.workspaceName);
+        } catch {
+          if (!active) return;
+          setWorkspaceName('ATS Resume Builder');
+        }
       })
       .catch(() => {
         if (!active) return;
@@ -67,6 +81,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       if (!profileMenuRef.current?.contains(event.target as Node)) {
         setProfileMenuOpen(false);
       }
+      if (!notificationMenuRef.current?.contains(event.target as Node)) {
+        setNotificationMenuOpen(false);
+      }
     }
 
     window.addEventListener('mousedown', handleClickOutside);
@@ -76,6 +93,41 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    function handleSettingsUpdate(event: Event) {
+      const customEvent = event as CustomEvent<{ workspaceName?: string }>;
+      if (customEvent.detail?.workspaceName) {
+        setWorkspaceName(customEvent.detail.workspaceName);
+      }
+    }
+
+    window.addEventListener('workspace-settings-updated', handleSettingsUpdate as EventListener);
+    return () => window.removeEventListener('workspace-settings-updated', handleSettingsUpdate as EventListener);
+  }, []);
+
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    let active = true;
+
+    async function refreshNotifications() {
+      try {
+        const payload = await api.notifications.list(20);
+        if (!active) return;
+        setNotifications(payload.items);
+        setUnreadNotifications(payload.unreadCount);
+      } catch {
+        if (!active) return;
+      }
+    }
+
+    refreshNotifications();
+    const intervalId = window.setInterval(refreshNotifications, 30000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [status]);
 
   const pageTitle = useMemo(() => {
     const current = NAV_ITEMS.find((item) => pathname.startsWith(item.href));
@@ -89,6 +141,40 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       setAuthToken(null);
       setUser(null);
       router.replace('/auth/signin');
+    }
+  }
+
+  async function handleNotificationToggle() {
+    const nextOpen = !notificationMenuOpen;
+    setNotificationMenuOpen(nextOpen);
+    if (nextOpen) {
+      try {
+        const payload = await api.notifications.list(20);
+        setNotifications(payload.items);
+        setUnreadNotifications(payload.unreadCount);
+      } catch {
+        // Ignore transient notification fetch errors in header interactions.
+      }
+    }
+  }
+
+  async function handleMarkNotificationRead(notificationId: string) {
+    try {
+      const payload = await api.notifications.markRead(notificationId);
+      setNotifications(payload.items);
+      setUnreadNotifications(payload.unreadCount);
+    } catch {
+      // Ignore transient errors to avoid interrupting main workflow.
+    }
+  }
+
+  async function handleMarkAllNotificationsRead() {
+    try {
+      const payload = await api.notifications.markAllRead();
+      setNotifications(payload.items);
+      setUnreadNotifications(payload.unreadCount);
+    } catch {
+      // Ignore transient errors to avoid interrupting main workflow.
     }
   }
 
@@ -125,8 +211,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 A
               </div>
               {!collapsed && (
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold tracking-[0.02em]" style={{ color: 'var(--text-primary)' }}>ATS Resume Builder</div>
+                  <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold tracking-[0.02em]" style={{ color: 'var(--text-primary)' }}>{workspaceName}</div>
                   <div className="truncate text-xs" style={{ color: 'var(--text-dim)' }}>Workspace</div>
                 </div>
               )}
@@ -194,49 +280,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="relative mt-4" ref={profileMenuRef}>
-            {profileMenuOpen && (
-              <div className="absolute bottom-full left-0 right-0 mb-3 rounded-[18px] border p-2 backdrop-blur-xl" style={{ background: 'rgba(18,18,19,0.98)', borderColor: 'var(--border-subtle)', boxShadow: '0 24px 48px rgba(0,0,0,0.34)' }}>
-                {PROFILE_MENU.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setProfileMenuOpen(false)}
-                    className="flex items-center rounded-xl px-3 py-2.5 text-sm transition"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="mt-1 flex w-full items-center rounded-xl px-3 py-2.5 text-sm transition"
-                  style={{ color: '#f3a0a0' }}
-                >
-                  Logout
-                </button>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setProfileMenuOpen((current) => !current)}
-              className="flex w-full items-center gap-3 rounded-[16px] border p-3 text-left transition"
-              style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)' }}
-            >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold" style={{ background: '#1f8fff', color: '#07121d' }}>
-                {initials}
-              </div>
-              {!collapsed && (
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{user?.name || 'Your account'}</div>
-                  <div className="truncate text-xs" style={{ color: 'var(--text-dim)' }}>{user?.email || 'Manage workspace access'}</div>
-                </div>
-              )}
-              {!collapsed && <span style={{ color: 'var(--text-dim)' }}>{profileMenuOpen ? '−' : '+'}</span>}
-            </button>
-          </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -271,6 +314,114 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 >
                   Create New Resume
                 </Link>
+                <div className="relative hidden md:block" ref={notificationMenuRef}>
+                  <button
+                    type="button"
+                    onClick={handleNotificationToggle}
+                    className="relative flex h-11 w-11 items-center justify-center rounded-xl border transition"
+                    style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)', color: 'var(--text-secondary)' }}
+                    aria-label="Notifications"
+                  >
+                    <BellIcon />
+                    {unreadNotifications > 0 && (
+                      <span
+                        className="absolute -right-1 -top-1 min-w-[20px] rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 text-white"
+                        style={{ background: '#ef4444' }}
+                      >
+                        {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                      </span>
+                    )}
+                  </button>
+
+                  {notificationMenuOpen && (
+                    <div
+                      className="absolute right-0 top-[calc(100%+12px)] z-30 w-[340px] rounded-[20px] border p-3 backdrop-blur-xl"
+                      style={{ background: 'rgba(18,18,19,0.98)', borderColor: 'var(--border-subtle)', boxShadow: '0 24px 48px rgba(0,0,0,0.34)' }}
+                    >
+                      <div className="mb-2 flex items-center justify-between px-1">
+                        <div className="text-sm font-semibold text-[var(--text-primary)]">Notifications</div>
+                        <button
+                          type="button"
+                          onClick={handleMarkAllNotificationsRead}
+                          disabled={unreadNotifications === 0}
+                          className="text-xs font-semibold text-[var(--text-secondary)] disabled:opacity-50"
+                        >
+                          Mark all read
+                        </button>
+                      </div>
+
+                      <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                        {notifications.length > 0 ? (
+                          notifications.map((notification) => (
+                            <button
+                              key={notification.id}
+                              type="button"
+                              onClick={() => handleMarkNotificationRead(notification.id)}
+                              className="block w-full rounded-xl border px-4 py-3 text-left transition hover:bg-[var(--bg-hover)]"
+                              style={{
+                                borderColor: 'var(--border-subtle)',
+                                background: notification.is_read ? 'transparent' : 'rgba(31,143,255,0.08)',
+                              }}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="text-sm font-semibold text-[var(--text-primary)]">{notification.title}</div>
+                                {!notification.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#1f8fff]" />}
+                              </div>
+                              <div className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{notification.message}</div>
+                              <div className="mt-2 text-[10px] uppercase tracking-[0.18em] text-[var(--text-dim)]">
+                                {formatRelativeTime(notification.created_at)}
+                              </div>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="rounded-xl border px-4 py-4 text-sm text-[var(--text-secondary)]" style={{ borderColor: 'var(--border-subtle)' }}>
+                            No notifications in the last 24 hours.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="relative hidden md:block" ref={profileMenuRef}>
+                  {profileMenuOpen && (
+                    <div
+                      className="absolute right-0 top-[calc(100%+12px)] z-30 w-[280px] rounded-[20px] border p-2 backdrop-blur-xl"
+                      style={{ background: 'rgba(18,18,19,0.98)', borderColor: 'var(--border-subtle)', boxShadow: '0 24px 48px rgba(0,0,0,0.34)' }}
+                    >
+                      {PROFILE_MENU.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setProfileMenuOpen(false)}
+                          className="flex items-center rounded-xl px-4 py-3 text-sm transition hover:bg-[var(--bg-hover)]"
+                          style={{ color: 'var(--text-secondary)' }}
+                        >
+                          {item.label}
+                        </Link>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="mt-1 flex w-full items-center rounded-xl px-4 py-3 text-sm transition hover:bg-[var(--bg-hover)]"
+                        style={{ color: '#f3a0a0' }}
+                      >
+                        Logout
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setProfileMenuOpen((current) => !current)}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border transition"
+                    style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)' }}
+                    aria-label="Open account menu"
+                  >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold" style={{ background: '#1f8fff', color: '#07121d' }}>
+                      {initials}
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
           </header>
@@ -444,6 +595,37 @@ function SettingsIcon({ active }: { active: boolean | undefined }) {
     active,
     <path d="M8 5.5A2.5 2.5 0 108 10.5 2.5 2.5 0 008 5.5zm5 2.5l-1.2.5a4.9 4.9 0 01-.4 1l.7 1.1-1.4 1.4-1.1-.7a4.9 4.9 0 01-1 .4L8 13l-1.5-.3a4.9 4.9 0 01-1-.4l-1.1.7-1.4-1.4.7-1.1a4.9 4.9 0 01-.4-1L3 8l.3-1.5a4.9 4.9 0 01.4-1l-.7-1.1L4.4 3l1.1.7a4.9 4.9 0 011-.4L8 2.9l1.5.4a4.9 4.9 0 011 .4l1.1-.7 1.4 1.4-.7 1.1a4.9 4.9 0 01.4 1L13 8z" />
   , true);
+}
+
+function SupportIcon({ active }: { active: boolean | undefined }) {
+  return iconShell(
+    active,
+    <path d="M8 13a1 1 0 110 2 1 1 0 010-2zm0-11a5 5 0 00-5 5h1.7A3.3 3.3 0 018 3.7 3.3 3.3 0 0111.3 7c0 1.8-1.5 2.5-2.4 3.1-.8.5-1.4 1-1.4 2.1v.3h1.6v-.2c0-.5.2-.8.9-1.2 1-.7 2.9-1.7 2.9-4.1A5 5 0 008 2z" />
+  , true);
+}
+
+function BellIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <g stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" className="opacity-85">
+        <path d="M8 13.5c.8 0 1.5-.6 1.5-1.4h-3c0 .8.7 1.4 1.5 1.4z" />
+        <path d="M3.5 11.5h9l-1.1-1.6V7.4A3.4 3.4 0 008 4a3.4 3.4 0 00-3.4 3.4v2.5L3.5 11.5z" />
+        <path d="M6.8 3.2A1.4 1.4 0 018 2.5c.5 0 .9.3 1.2.7" />
+      </g>
+    </svg>
+  );
+}
+
+function formatRelativeTime(value: string) {
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return 'Just now';
+
+  const diffMs = Date.now() - timestamp;
+  const minutes = Math.max(1, Math.floor(diffMs / 60000));
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return '1d ago';
 }
 
 function iconShell(active: boolean | undefined, path: JSX.Element, outlined = false) {

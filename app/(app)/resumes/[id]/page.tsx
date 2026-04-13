@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { api, type Resume, type ResumeContent } from '@/lib/api';
+import { api, type Resume, type ResumeContent, type UserSettings } from '@/lib/api';
 import ResumePreview from '@/components/resume/ResumePreview';
 import ATSPanel from '@/components/ats/ATSPanel';
 
@@ -18,6 +18,7 @@ export default function ResumeEditorPage() {
   const [openSection, setOpenSection] = useState<string | null>('summary');
   const [content, setContent] = useState<ResumeContent | null>(null);
   const [coverLetter, setCoverLetter] = useState('');
+  const [settings, setSettings] = useState<UserSettings | null>(null);
 
   // Placeholder meta — in production, fetch from /profile
   const meta = {
@@ -28,6 +29,10 @@ export default function ResumeEditorPage() {
     linkedin: 'linkedin.com/in/alexj',
     github: 'github.com/alexj',
   };
+
+  useEffect(() => {
+    api.settings.get().then(setSettings).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     api.resumes.get(id)
@@ -204,9 +209,10 @@ export default function ResumeEditorPage() {
               <button
                 type="button"
                 onClick={handleCoverPdfDownload}
+                disabled={!settings?.exports.includeCoverLetter}
                 className="mt-2 w-full flex items-center justify-center py-2 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600"
               >
-                ↓ Download Cover Letter PDF
+                {settings?.exports.includeCoverLetter ? '↓ Download Cover Letter PDF' : 'Cover letter export disabled in settings'}
               </button>
             </div>
           )}
