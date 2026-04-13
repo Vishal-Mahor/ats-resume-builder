@@ -149,6 +149,48 @@ CREATE TABLE IF NOT EXISTS user_settings (
 );
 CREATE INDEX IF NOT EXISTS idx_user_settings_user ON user_settings(user_id);
 
+-- ─── Billing & Usage ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+  id                        TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  user_id                   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan                      TEXT NOT NULL DEFAULT 'free',
+  period_start              TEXT NOT NULL DEFAULT (strftime('%Y-%m-01T00:00:00.000Z', 'now')),
+  period_end                TEXT NOT NULL DEFAULT (strftime('%Y-%m-01T00:00:00.000Z', 'now', '+1 month')),
+  resumes_used_in_period    INTEGER NOT NULL DEFAULT 0,
+  jd_analyses_used_in_period INTEGER NOT NULL DEFAULT 0,
+  created_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE(user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user ON user_subscriptions(user_id);
+
+CREATE TABLE IF NOT EXISTS billing_events (
+  id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event_type  TEXT NOT NULL,
+  plan        TEXT,
+  usage_type  TEXT,
+  delta       INTEGER NOT NULL DEFAULT 0,
+  metadata    TEXT NOT NULL DEFAULT '{}',
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_billing_events_user_created ON billing_events(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS billing_transactions (
+  id                    TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider              TEXT NOT NULL,
+  provider_reference_id TEXT NOT NULL,
+  amount_paise          INTEGER NOT NULL,
+  currency              TEXT NOT NULL DEFAULT 'INR',
+  status                TEXT NOT NULL DEFAULT 'created',
+  metadata              TEXT NOT NULL DEFAULT '{}',
+  created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE(provider, provider_reference_id)
+);
+CREATE INDEX IF NOT EXISTS idx_billing_transactions_user_created ON billing_transactions(user_id, created_at DESC);
+
 -- ─── Notifications ────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS notifications (
   id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),

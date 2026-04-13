@@ -19,13 +19,14 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/profile', label: 'My Profile', icon: ProfileIcon },
   { href: '/templates', label: 'Templates', icon: TemplateIcon },
   { href: '/analytics', label: 'Analytics', icon: ChartIcon },
+  { href: '/billing', label: 'Billing', icon: WalletIcon },
   { href: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 const PROFILE_MENU = [
   { href: '/profile', label: 'My Profile' },
   { href: '/settings', label: 'Settings' },
-  { href: '/settings?tab=billing', label: 'Billing / Subscription' },
+  { href: '/billing', label: 'Billing / Subscription' },
   { href: '/support', label: 'Help / Support' },
 ];
 
@@ -594,6 +595,13 @@ function SettingsIcon({ active }: { active: boolean | undefined }) {
     active,
     <path d="M8 5.5A2.5 2.5 0 108 10.5 2.5 2.5 0 008 5.5zm5 2.5l-1.2.5a4.9 4.9 0 01-.4 1l.7 1.1-1.4 1.4-1.1-.7a4.9 4.9 0 01-1 .4L8 13l-1.5-.3a4.9 4.9 0 01-1-.4l-1.1.7-1.4-1.4.7-1.1a4.9 4.9 0 01-.4-1L3 8l.3-1.5a4.9 4.9 0 01.4-1l-.7-1.1L4.4 3l1.1.7a4.9 4.9 0 011-.4L8 2.9l1.5.4a4.9 4.9 0 011 .4l1.1-.7 1.4 1.4-.7 1.1a4.9 4.9 0 01.4 1L13 8z" />
   , true);
+}
+
+function WalletIcon({ active }: { active: boolean | undefined }) {
+  return iconShell(
+    active,
+    <path d="M3 5.5A1.5 1.5 0 014.5 4h7A1.5 1.5 0 0113 5.5v1h-2.4a2.1 2.1 0 100 4.2H13v.8A1.5 1.5 0 0111.5 13h-7A1.5 1.5 0 013 11.5v-6zM10.6 7.5a1.1 1.1 0 000 2.2H14v-2.2h-3.4z" />
+  );
 }
 
 function BellIcon() {

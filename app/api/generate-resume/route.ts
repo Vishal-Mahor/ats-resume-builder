@@ -8,6 +8,7 @@ import { getFullProfile } from '@/lib/server/profile-service';
 import { getUserSettings } from '@/lib/server/settings-service';
 import { getResumeTemplateById } from '@/lib/server/template-service';
 import { createNotificationForUser } from '@/lib/server/notification-service';
+import { assertCanUse, consumeUsage } from '@/lib/server/billing-service';
 import {
   COVER_LETTER_PROMPT,
   JD_ANALYSIS_PROMPT,
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
   try {
     const userId = requireAuthUserId(request);
     const body = generateSchema.parse(await request.json());
+    await assertCanUse(userId, 'resume');
     const [userProfile, selectedTemplate, userSettings] = await Promise.all([
       getFullProfile(userId),
       getResumeTemplateById(body.template_id),
@@ -116,6 +118,7 @@ export async function POST(request: Request) {
         JSON.stringify(matchResult.suggestions),
       ]
     );
+    await consumeUsage(userId, 'resume');
 
     try {
       await createNotificationForUser({

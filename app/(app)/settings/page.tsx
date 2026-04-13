@@ -6,14 +6,13 @@ import { useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { api, type ResumeTemplate, type UserSettings } from '@/lib/api';
 
-type SettingsTab = 'general' | 'notifications' | 'exports' | 'privacy' | 'billing';
+type SettingsTab = 'general' | 'notifications' | 'exports' | 'privacy';
 
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; description: string }> = [
   { id: 'general', label: 'General', description: 'Workspace identity and default behavior' },
   { id: 'notifications', label: 'Notifications', description: 'Email and workflow alerts' },
   { id: 'exports', label: 'Exports', description: 'PDF naming and template defaults' },
   { id: 'privacy', label: 'Privacy', description: 'Data retention and verification status' },
-  { id: 'billing', label: 'Billing', description: 'Plan, limits, and upgrade path' },
 ];
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -358,21 +357,6 @@ export default function SettingsPage() {
           </SectionCard>
         )}
 
-        {activeTab === 'billing' && (
-          <SectionCard
-            eyebrow="Billing"
-            title="Current plan and usage posture"
-            description="This section remains informational for now, while your actual settings persist separately per user."
-          >
-            <div className="grid gap-4 md:grid-cols-2">
-              <MetricTile label="Plan" value="Free" helper="Base workspace access" />
-              <MetricTile label="Premium templates" value={`${templates.length}`} helper="Currently available in the workspace" />
-              <MetricTile label="Monthly generation cap" value="Flexible" helper="No hard cap configured yet" />
-              <MetricTile label="Upgrade path" value="Ready" helper="Billing hooks can plug in here later" />
-            </div>
-          </SectionCard>
-        )}
-
       </section>
 
       <aside className="space-y-6">
@@ -597,16 +581,6 @@ function CountryAutocompleteInput({
         )}
       </div>
     </label>
-  );
-}
-
-function MetricTile({ label, value, helper }: { label: string; value: string; helper: string }) {
-  return (
-    <div className="app-panel-muted p-4">
-      <div className="app-caption">{label}</div>
-      <div className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-[var(--text-primary)]">{value}</div>
-      <div className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{helper}</div>
-    </div>
   );
 }
 

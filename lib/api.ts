@@ -169,6 +169,24 @@ export const api = {
       request<UserSettings>('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
   },
 
+  billing: {
+    get: () => request<BillingSnapshot>('/api/billing'),
+    updatePlan: (plan: 'free' | 'plus') =>
+      request<BillingSnapshot>('/api/billing', {
+        method: 'PUT',
+        body: JSON.stringify({ plan }),
+      }),
+    createPlusCheckout: () =>
+      request<{ checkoutUrl: string; paymentLinkId: string; amountPaise: number }>('/api/billing/checkout-plus', {
+        method: 'POST',
+      }),
+    confirmPlusPayment: (paymentLinkId: string) =>
+      request<BillingSnapshot>('/api/billing/confirm-plus', {
+        method: 'POST',
+        body: JSON.stringify({ paymentLinkId }),
+      }),
+  },
+
   templates: {
     list: () => request<ResumeTemplate[]>('/api/templates'),
   },
@@ -378,6 +396,47 @@ export interface SupportRequestInput {
   category: SupportCategory;
   subject: string;
   message: string;
+}
+
+export interface BillingSnapshot {
+  plan: 'free' | 'plus';
+  periodStart: string;
+  periodEnd: string;
+  usage: {
+    resumesUsed: number;
+    jdAnalysesUsed: number;
+    resumesLimit: number;
+    jdAnalysesLimit: number;
+  };
+  plans: {
+    free: {
+      resumesPerMonth: number;
+      jdAnalysesPerMonth: number;
+    };
+    plus: {
+      resumesPerMonth: number;
+      jdAnalysesPerMonth: number;
+    };
+  };
+  events: Array<{
+    id: string;
+    eventType: string;
+    plan?: 'free' | 'plus';
+    usageType?: 'resume' | 'jd-analysis';
+    delta: number;
+    metadata: Record<string, unknown>;
+    createdAt: string;
+  }>;
+  transactions: Array<{
+    id: string;
+    provider: string;
+    referenceId: string;
+    amountPaise: number;
+    currency: string;
+    status: string;
+    metadata: Record<string, unknown>;
+    createdAt: string;
+  }>;
 }
 
 export interface Suggestion {

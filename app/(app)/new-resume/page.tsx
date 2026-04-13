@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { api, type FullProfile, type JDAnalysisResult, type ResumeTemplate } from '@/lib/api';
+import { api, type BillingSnapshot, type FullProfile, type JDAnalysisResult, type ResumeTemplate } from '@/lib/api';
 
 const SOURCE_OPTIONS = [
   { value: 'linkedin', label: 'LinkedIn' },
@@ -38,6 +38,7 @@ export default function NewResumePage() {
   const [profile, setProfile] = useState<FullProfile | null>(null);
   const [templates, setTemplates] = useState<ResumeTemplate[]>([]);
   const [analysis, setAnalysis] = useState<JDAnalysisResult | null>(null);
+  const [billing, setBilling] = useState<BillingSnapshot | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [form, setForm] = useState({
@@ -50,10 +51,11 @@ export default function NewResumePage() {
   });
 
   useEffect(() => {
-    Promise.all([api.profile.get(), api.templates.list(), api.settings.get()])
-      .then(([profileResult, templateResult, settingsResult]) => {
+    Promise.all([api.profile.get(), api.templates.list(), api.settings.get(), api.billing.get()])
+      .then(([profileResult, templateResult, settingsResult, billingResult]) => {
         setProfile(profileResult);
         setTemplates(templateResult);
+        setBilling(billingResult);
         const requestedTemplate = searchParams.get('template');
         const fallbackTemplate =
           templateResult.find((template) => template.id === settingsResult.exports.defaultTemplate)?.id ??
@@ -104,8 +106,18 @@ export default function NewResumePage() {
       sections,
     };
   }, [profile]);
+  const resumeLimitReached = Boolean(
+    billing && billing.plan === 'free' && billing.usage.resumesUsed >= billing.usage.resumesLimit
+  );
+  const jdLimitReached = Boolean(
+    billing && billing.plan === 'free' && billing.usage.jdAnalysesUsed >= billing.usage.jdAnalysesLimit
+  );
 
   async function handleAnalyze() {
+    if (jdLimitReached) {
+      toast.error('JD analysis limit reached for Free plan. Upgrade to Plus.');
+      return;
+    }
     if (form.job_description.trim().length < 50) {
       toast.error('Paste a longer job description so we can analyze it properly.');
       return;
@@ -124,6 +136,10 @@ export default function NewResumePage() {
   }
 
   async function handleGenerate() {
+    if (resumeLimitReached) {
+      toast.error('Resume generation limit reached for Free plan. Upgrade to Plus.');
+      return;
+    }
     if (!form.company_name.trim() || !form.job_title.trim()) {
       toast.error('Add both company name and job title before generating.');
       return;
@@ -158,6 +174,12 @@ export default function NewResumePage() {
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_370px]">
       <section className="space-y-6">
         <div className="app-panel p-6 sm:p-7">
+          {(resumeLimitReached || jdLimitReached) && (
+            <div className="mb-5 rounded-2xl border border-amber-300/35 bg-amber-500/12 px-4 py-3 text-sm text-amber-100">
+              Free plan limit reached{resumeLimitReached && jdLimitReached ? ' for resume generation and JD analysis' : resumeLimitReached ? ' for resume generation' : ' for JD analysis'}.
+              <a href="/billing" className="ml-2 font-semibold underline underline-offset-4">Upgrade to Plus</a>.
+            </div>
+          )}
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="app-eyebrow">Creation workflow</div>
@@ -171,7 +193,7 @@ export default function NewResumePage() {
             <button
               type="button"
               onClick={handleAnalyze}
-              disabled={analyzing}
+              disabled={analyzing || jdLimitReached}
               className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-70"
             >
               {analyzing ? 'Analyzing...' : 'Analyze JD'}
@@ -277,7 +299,7 @@ export default function NewResumePage() {
             <button
               type="button"
               onClick={handleAnalyze}
-              disabled={analyzing}
+              disabled={analyzing || jdLimitReached}
               className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-70"
             >
               {analyzing ? 'Analyzing JD...' : 'Analyze JD First'}
@@ -285,7 +307,7 @@ export default function NewResumePage() {
             <button
               type="button"
               onClick={handleGenerate}
-              disabled={generating}
+              disabled={generating || resumeLimitReached}
               className="app-button-primary disabled:cursor-not-allowed disabled:opacity-70"
             >
               {generating ? 'Generating resume...' : 'Generate Resume'}

@@ -2,14 +2,33 @@
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { api, type JDAnalysisResult } from '@/lib/api';
+import { api, type BillingSnapshot, type JDAnalysisResult } from '@/lib/api';
+import { useEffect } from 'react';
 
 export default function JDAnalysisPage() {
   const [jobDescription, setJobDescription] = useState('');
   const [analysis, setAnalysis] = useState<JDAnalysisResult | null>(null);
+  const [billing, setBilling] = useState<BillingSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    api.billing
+      .get()
+      .then(setBilling)
+      .catch(() => {
+        // Ignore billing fetch errors here to keep analysis page usable.
+      });
+  }, []);
+
+  const jdLimitReached = Boolean(
+    billing && billing.plan === 'free' && billing.usage.jdAnalysesUsed >= billing.usage.jdAnalysesLimit
+  );
+
   async function analyze() {
+    if (jdLimitReached) {
+      toast.error('JD analysis limit reached for Free plan. Upgrade to Plus.');
+      return;
+    }
     if (jobDescription.trim().length < 50) {
       toast.error('Paste a fuller job description first.');
       return;
@@ -29,6 +48,12 @@ export default function JDAnalysisPage() {
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.9fr)]">
       <section className="app-panel p-6">
+        {jdLimitReached && (
+          <div className="mb-5 rounded-2xl border border-amber-300/35 bg-amber-500/12 px-4 py-3 text-sm text-amber-100">
+            Free plan JD analysis limit reached.
+            <a href="/billing" className="ml-2 font-semibold underline underline-offset-4">Upgrade to Plus</a>.
+          </div>
+        )}
         <div className="app-eyebrow">JD analysis</div>
         <h2 className="app-heading mt-2">
           Break down the role before you generate
@@ -48,7 +73,7 @@ export default function JDAnalysisPage() {
         <button
           type="button"
           onClick={analyze}
-          disabled={loading}
+          disabled={loading || jdLimitReached}
           className="app-button-primary mt-5 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {loading ? 'Analyzing...' : 'Analyze job description'}

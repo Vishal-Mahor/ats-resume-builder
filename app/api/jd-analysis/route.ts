@@ -4,6 +4,7 @@ import { callOpenAI } from '@/lib/server/ai';
 import { requireAuthUserId } from '@/lib/server/auth-token';
 import { handleRouteError } from '@/lib/server/http';
 import { getFullProfile } from '@/lib/server/profile-service';
+import { assertCanUse, consumeUsage } from '@/lib/server/billing-service';
 import { JD_ANALYSIS_PROMPT, MATCH_PROFILE_PROMPT } from '@/lib/server/prompts';
 
 export const runtime = 'nodejs';
@@ -16,10 +17,12 @@ export async function POST(request: Request) {
   try {
     const userId = requireAuthUserId(request);
     const body = analysisSchema.parse(await request.json());
+    await assertCanUse(userId, 'jd-analysis');
     const userProfile = await getFullProfile(userId);
 
     const jdAnalysis = JSON.parse(await callOpenAI(JD_ANALYSIS_PROMPT(body.job_description)));
     const matchResult = JSON.parse(await callOpenAI(MATCH_PROFILE_PROMPT(userProfile, jdAnalysis)));
+    await consumeUsage(userId, 'jd-analysis');
 
     const matchLabel =
       matchResult.ats_score >= 80 ? 'Strong match' : matchResult.ats_score >= 65 ? 'Promising fit' : 'Needs strengthening';
