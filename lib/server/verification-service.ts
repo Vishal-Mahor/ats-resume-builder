@@ -74,8 +74,13 @@ async function sendPhoneOtp(target: string, code: string) {
     throw new HttpError(500, 'Missing Twilio configuration');
   }
 
+  const to = normalizePhoneNumberForSms(target);
+  if (!to) {
+    throw new HttpError(400, 'Enter phone number in international format, e.g. +91XXXXXXXXXX.');
+  }
+
   const body = new URLSearchParams({
-    To: target,
+    To: to,
     From: from,
     Body: `Your ATS Resume Builder verification code is ${code}. It expires in ${OTP_TTL_MINUTES} minutes.`,
   });
@@ -91,8 +96,11 @@ async function sendPhoneOtp(target: string, code: string) {
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new HttpError(500, `Failed to send SMS OTP: ${error}`);
+    const errorBody = await response.text();
+    if (errorBody.includes('"code":21211')) {
+      throw new HttpError(400, 'Invalid phone number. Use international format like +91XXXXXXXXXX.');
+    }
+    throw new HttpError(500, 'Failed to send SMS OTP. Please check Twilio configuration and try again.');
   }
 }
 
@@ -177,4 +185,30 @@ export async function confirmVerificationOtp(userId: string, channel: Verificati
   }
 
   return getFullProfile(userId);
+}
+
+function normalizePhoneNumberForSms(raw: string) {
+  const defaultCountryCode = process.env.TWILIO_DEFAULT_COUNTRY_CODE?.trim() || '';
+  const digitsOnly = raw.replace(/[^\d+]/g, '');
+
+  if (!digitsOnly) {
+    return null;
+  }
+
+  if (digitsOnly.startsWith('+')) {
+    return /^\+[1-9]\d{7,14}$/.test(digitsOnly) ? digitsOnly : null;
+  }
+
+  if (digitsOnly.startsWith('00')) {
+    const normalized = `+${digitsOnly.slice(2)}`;
+    return /^\+[1-9]\d{7,14}$/.test(normalized) ? normalized : null;
+  }
+
+  if (defaultCountryCode && /^\+?[1-9]\d{0,3}$/.test(defaultCountryCode)) {
+    const prefix = defaultCountryCode.startsWith('+') ? defaultCountryCode : `+${defaultCountryCode}`;
+    const normalized = `${prefix}${digitsOnly.replace(/^0+/, '')}`;
+    return /^\+[1-9]\d{7,14}$/.test(normalized) ? normalized : null;
+  }
+
+  return null;
 }
