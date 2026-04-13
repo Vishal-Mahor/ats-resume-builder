@@ -133,9 +133,14 @@ export const api = {
         body: JSON.stringify({ email, password }),
       }),
     register: (email: string, password: string, name: string) =>
-      request<{ accessToken: string; user: User }>('/api/auth/register', {
+      request<{ sent: boolean; requiresEmailVerification: boolean }>('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({ email, password, name }),
+      }),
+    confirmRegistrationOtp: (email: string, code: string) =>
+      request<{ accessToken: string; user: User }>('/api/auth/register/confirm-otp', {
+        method: 'POST',
+        body: JSON.stringify({ email, code }),
       }),
     me: () => request<User>('/api/auth/me'),
     logout: () => request<{ success: boolean }>('/api/auth/logout', { method: 'POST' }, false),

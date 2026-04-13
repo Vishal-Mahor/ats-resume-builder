@@ -19,7 +19,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/profile', label: 'My Profile', icon: ProfileIcon },
   { href: '/templates', label: 'Templates', icon: TemplateIcon },
   { href: '/analytics', label: 'Analytics', icon: ChartIcon },
-  { href: '/support', label: 'Support', icon: SupportIcon },
   { href: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
@@ -594,13 +593,6 @@ function SettingsIcon({ active }: { active: boolean | undefined }) {
   return iconShell(
     active,
     <path d="M8 5.5A2.5 2.5 0 108 10.5 2.5 2.5 0 008 5.5zm5 2.5l-1.2.5a4.9 4.9 0 01-.4 1l.7 1.1-1.4 1.4-1.1-.7a4.9 4.9 0 01-1 .4L8 13l-1.5-.3a4.9 4.9 0 01-1-.4l-1.1.7-1.4-1.4.7-1.1a4.9 4.9 0 01-.4-1L3 8l.3-1.5a4.9 4.9 0 01.4-1l-.7-1.1L4.4 3l1.1.7a4.9 4.9 0 011-.4L8 2.9l1.5.4a4.9 4.9 0 011 .4l1.1-.7 1.4 1.4-.7 1.1a4.9 4.9 0 01.4 1L13 8z" />
-  , true);
-}
-
-function SupportIcon({ active }: { active: boolean | undefined }) {
-  return iconShell(
-    active,
-    <path d="M8 13a1 1 0 110 2 1 1 0 010-2zm0-11a5 5 0 00-5 5h1.7A3.3 3.3 0 018 3.7 3.3 3.3 0 0111.3 7c0 1.8-1.5 2.5-2.4 3.1-.8.5-1.4 1-1.4 2.1v.3h1.6v-.2c0-.5.2-.8.9-1.2 1-.7 2.9-1.7 2.9-4.1A5 5 0 008 2z" />
   , true);
 }
 

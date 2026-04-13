@@ -14,6 +14,7 @@ type AuthMode = 'signin' | 'register';
 type FormErrors = {
   email?: string;
   password?: string;
+  otp?: string;
 };
 
 export default function SignInPage() {
@@ -22,6 +23,9 @@ export default function SignInPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [awaitingOtp, setAwaitingOtp] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<'google' | 'github' | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -95,6 +99,15 @@ export default function SignInPage() {
     return Object.keys(nextErrors).length === 0;
   }
 
+  function validateOtp() {
+    const nextErrors: FormErrors = {};
+    if (!/^\d{6}$/.test(otpCode.trim())) {
+      nextErrors.otp = 'Enter a valid 6-digit OTP.';
+    }
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }
+
   async function handleEmailSubmit(event: FormEvent) {
     event.preventDefault();
 
@@ -109,16 +122,40 @@ export default function SignInPage() {
         mode === 'register'
           ? await api.auth.register(email.trim(), password, email.split('@')[0])
           : await api.auth.login(email.trim(), password);
-
-      setAuthToken(authResult.accessToken);
-      toast.success(mode === 'register' ? 'Account created successfully.' : 'Signed in successfully.');
-      router.push('/dashboard');
-      router.refresh();
+      if (mode === 'register') {
+        setAwaitingOtp(Boolean(authResult.requiresEmailVerification));
+        toast.success('OTP sent to your email. Enter it below to verify your account.');
+      } else {
+        setAuthToken(authResult.accessToken);
+        toast.success('Signed in successfully.');
+        router.push('/dashboard');
+        router.refresh();
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to continue right now.';
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleConfirmOtp() {
+    if (!validateOtp()) {
+      return;
+    }
+
+    setOtpSending(true);
+    try {
+      const result = await api.auth.confirmRegistrationOtp(email.trim(), otpCode.trim());
+      setAuthToken(result.accessToken);
+      toast.success('Email verified. Account created successfully.');
+      router.push('/dashboard');
+      router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to verify OTP right now.';
+      toast.error(message);
+    } finally {
+      setOtpSending(false);
     }
   }
 
@@ -200,6 +237,8 @@ export default function SignInPage() {
                   onClick={() => {
                     setMode('signin');
                     setErrors({});
+                    setAwaitingOtp(false);
+                    setOtpCode('');
                   }}
                   className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
                     mode === 'signin' ? 'bg-cyan-100 text-slate-950 shadow-sm' : 'text-white/60 hover:text-white'
@@ -212,6 +251,8 @@ export default function SignInPage() {
                   onClick={() => {
                     setMode('register');
                     setErrors({});
+                    setAwaitingOtp(false);
+                    setOtpCode('');
                   }}
                   className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
                     mode === 'register' ? 'bg-cyan-100 text-slate-950 shadow-sm' : 'text-white/60 hover:text-white'
@@ -258,7 +299,8 @@ export default function SignInPage() {
               </div>
             )}
 
-            <form onSubmit={handleEmailSubmit} className="space-y-4" noValidate>
+            {!awaitingOtp ? (
+              <form onSubmit={handleEmailSubmit} className="space-y-4" noValidate>
               <div>
                 <label htmlFor="email" className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-white/55">
                   Email
@@ -275,8 +317,8 @@ export default function SignInPage() {
                     }
                   }}
                   placeholder="you@company.com"
-                  className={`w-full rounded-2xl border bg-white/6 px-4 py-3 text-sm text-white placeholder:text-white/28 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 ${
-                    errors.email ? 'border-red-400/70' : 'border-white/10 focus:border-cyan-300'
+                  className={`w-full rounded-2xl border bg-white/95 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] focus:outline-none focus:ring-2 focus:ring-cyan-400/35 ${
+                    errors.email ? 'border-red-400/75' : 'border-white/18 focus:border-cyan-300'
                   }`}
                 />
                 {errors.email && <p className="mt-2 text-sm text-red-300">{errors.email}</p>}
@@ -310,23 +352,70 @@ export default function SignInPage() {
                     }
                   }}
                   placeholder={mode === 'signin' ? 'Enter your password' : 'Create a strong password'}
-                  className={`w-full rounded-2xl border bg-white/6 px-4 py-3 text-sm text-white placeholder:text-white/28 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 ${
-                    errors.password ? 'border-red-400/70' : 'border-white/10 focus:border-cyan-300'
+                  className={`w-full rounded-2xl border bg-white/95 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] focus:outline-none focus:ring-2 focus:ring-cyan-400/35 ${
+                    errors.password ? 'border-red-400/75' : 'border-white/18 focus:border-cyan-300'
                   }`}
                 />
-                <p className="mt-2 text-sm text-white/38">{passwordHint}</p>
+                <p className="mt-2 text-sm text-slate-300/80">{passwordHint}</p>
                 {errors.password && <p className="mt-2 text-sm text-red-300">{errors.password}</p>}
               </div>
 
-              <button
-                type="submit"
-                disabled={loading || socialLoading !== null}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(90deg,#8b5cf6,#22d3ee)] px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {loading && <Spinner />}
-                {loading ? (mode === 'signin' ? 'Signing you in...' : 'Creating your account...') : modeCopy.cta}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={loading || socialLoading !== null}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(90deg,#8b5cf6,#22d3ee)] px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {loading && <Spinner />}
+                  {loading ? (mode === 'signin' ? 'Signing you in...' : 'Sending OTP...') : modeCopy.cta}
+                </button>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-cyan-300/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+                  Verify your email to complete signup. We sent a 6-digit OTP to <strong>{email.trim()}</strong>.
+                </div>
+                <div>
+                  <label htmlFor="signup-otp" className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-white/55">
+                    Email OTP
+                  </label>
+                  <input
+                    id="signup-otp"
+                    value={otpCode}
+                    onChange={(event) => {
+                      setOtpCode(event.target.value);
+                      if (errors.otp) {
+                        setErrors((current) => ({ ...current, otp: undefined }));
+                      }
+                    }}
+                    placeholder="Enter 6-digit code"
+                    className={`w-full rounded-2xl border bg-white/95 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] focus:outline-none focus:ring-2 focus:ring-cyan-400/35 ${
+                      errors.otp ? 'border-red-400/75' : 'border-white/18 focus:border-cyan-300'
+                    }`}
+                  />
+                  {errors.otp && <p className="mt-2 text-sm text-red-300">{errors.otp}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleConfirmOtp}
+                  disabled={otpSending}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(90deg,#8b5cf6,#22d3ee)] px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {otpSending && <Spinner />}
+                  {otpSending ? 'Verifying OTP...' : 'Verify and create account'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAwaitingOtp(false);
+                    setOtpCode('');
+                    setErrors({});
+                  }}
+                  className="w-full text-xs font-medium text-cyan-200 transition hover:text-white"
+                >
+                  Back to signup form
+                </button>
+              </div>
+            )}
 
             <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200/75">What happens next</div>
