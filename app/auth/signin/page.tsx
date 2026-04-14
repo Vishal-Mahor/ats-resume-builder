@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -118,14 +119,12 @@ export default function SignInPage() {
     setLoading(true);
 
     try {
-      const authResult =
-        mode === 'register'
-          ? await api.auth.register(email.trim(), password, email.split('@')[0])
-          : await api.auth.login(email.trim(), password);
       if (mode === 'register') {
+        const authResult = await api.auth.register(email.trim(), password, email.split('@')[0]);
         setAwaitingOtp(Boolean(authResult.requiresEmailVerification));
         toast.success('OTP sent to your email. Enter it below to verify your account.');
       } else {
+        const authResult = await api.auth.login(email.trim(), password);
         setAuthToken(authResult.accessToken);
         toast.success('Signed in successfully.');
         router.push('/dashboard');
@@ -186,8 +185,16 @@ export default function SignInPage() {
       <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col lg:flex-row">
         <section className="flex flex-1 items-center px-5 py-10 sm:px-8 lg:px-12 lg:py-14">
           <div className="w-full max-w-2xl">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-cyan-100 shadow-sm backdrop-blur-md">
-              ATS Resume Builder
+            <div className="mb-6 flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-cyan-100 shadow-sm backdrop-blur-md">
+                ATS Resume Builder
+              </div>
+              <Link
+                href="/"
+                className="inline-flex items-center rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-200 transition hover:bg-white/10"
+              >
+                Back to site
+              </Link>
             </div>
 
             <div className="space-y-5">

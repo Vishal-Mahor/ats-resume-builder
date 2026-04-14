@@ -173,9 +173,11 @@ Environment variables for verification:
 - `SMTP_USER`
 - `SMTP_PASS`
 - `SMTP_FROM_EMAIL`
-- `TWILIO_ACCOUNT_SID`
+- `TWILIO_ACCOUNT_SID` (`AC...` from your Twilio project)
 - `TWILIO_AUTH_TOKEN`
-- `TWILIO_FROM_PHONE`
+- `TWILIO_VERIFY_SERVICE_SID` (`VA...` if you are using Twilio Verify)
+- `TWILIO_FROM_PHONE` (required only when using the older direct SMS send flow instead of Twilio Verify)
+- `TWILIO_DEFAULT_COUNTRY_CODE` (optional, for local numbers entered without `+countrycode`)
 
 ## 🧩 Template Source Of Truth
 

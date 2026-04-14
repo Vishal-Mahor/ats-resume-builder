@@ -5,7 +5,7 @@ import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: 'ATS Resume Builder AI',
-  description: 'AI-powered, ATS-optimized resumes tailored to every job description',
+  description: 'AI-powered resume tailoring, ATS analysis, pricing, and support for faster job applications.',
   icons: { icon: '/favicon.ico' },
 };
 

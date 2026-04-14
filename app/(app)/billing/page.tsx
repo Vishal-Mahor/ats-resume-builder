@@ -80,7 +80,7 @@ export default function BillingPage() {
     try {
       const updated = await api.billing.updatePlan(plan);
       setBilling(updated);
-      toast.success(`Switched to ${plan === 'plus' ? 'Plus' : 'Free'} plan.`);
+      toast.success('Switched to Free plan.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update plan.');
     } finally {

@@ -62,6 +62,224 @@
 }
 
 @layer components {
+  .marketing-shell {
+    @apply min-h-screen overflow-hidden;
+    background:
+      radial-gradient(circle at top left, rgba(255, 149, 61, 0.14), transparent 24%),
+      radial-gradient(circle at 88% 12%, rgba(46, 197, 182, 0.12), transparent 20%),
+      linear-gradient(180deg, #07131a 0%, #091821 38%, #051018 100%);
+    color: #f7f8f9;
+    position: relative;
+  }
+
+  .marketing-orb {
+    @apply pointer-events-none absolute rounded-full blur-3xl;
+    opacity: 0.6;
+  }
+
+  .marketing-orb-left {
+    left: -5rem;
+    top: 7rem;
+    height: 18rem;
+    width: 18rem;
+    background: rgba(255, 154, 61, 0.18);
+  }
+
+  .marketing-orb-right {
+    right: -4rem;
+    top: 10rem;
+    height: 22rem;
+    width: 22rem;
+    background: rgba(54, 208, 187, 0.14);
+  }
+
+  .marketing-logo-mark {
+    @apply flex h-11 w-11 items-center justify-center rounded-2xl text-lg font-semibold;
+    background: linear-gradient(135deg, #ffb059 0%, #ff7d3f 100%);
+    color: #091018;
+    box-shadow: 0 18px 40px rgba(255, 138, 61, 0.24);
+  }
+
+  .marketing-button-primary {
+    @apply inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition;
+    background: linear-gradient(135deg, #ffb45f 0%, #ff8844 100%);
+    color: #101418;
+    box-shadow: 0 18px 36px rgba(255, 138, 61, 0.24);
+  }
+
+  .marketing-button-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 22px 44px rgba(255, 138, 61, 0.3);
+  }
+
+  .marketing-button-form {
+    @apply inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition;
+    min-width: 10.5rem;
+    background: linear-gradient(180deg, rgba(255, 180, 95, 0.16), rgba(255, 138, 68, 0.16));
+    border: 1px solid rgba(255, 180, 95, 0.28);
+    color: #ffd9ae;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .marketing-button-form:hover {
+    background: linear-gradient(180deg, rgba(255, 180, 95, 0.22), rgba(255, 138, 68, 0.22));
+    border-color: rgba(255, 180, 95, 0.4);
+    color: #fff1df;
+  }
+
+  .marketing-button-ghost {
+    @apply inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-medium transition;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.84);
+    backdrop-filter: blur(14px);
+  }
+
+  .marketing-button-ghost:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+
+  .marketing-pill {
+    @apply inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em];
+    background: rgba(255, 180, 95, 0.14);
+    border: 1px solid rgba(255, 180, 95, 0.2);
+    color: #ffd39d;
+  }
+
+  .marketing-eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.28em];
+    color: #ffcb94;
+  }
+
+  .marketing-hero-card,
+  .marketing-section-card,
+  .marketing-feature-card,
+  .marketing-pricing-card,
+  .marketing-dashboard-card,
+  .marketing-footer,
+  .marketing-callout {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(10, 18, 24, 0.72);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(18px);
+  }
+
+  .marketing-hero-card {
+    @apply rounded-[34px] p-7 sm:p-9 lg:p-10;
+  }
+
+  .marketing-dashboard-card {
+    @apply rounded-[30px] p-5 sm:p-6;
+  }
+
+  .marketing-window-topbar {
+    @apply mb-5 flex gap-2;
+  }
+
+  .marketing-window-topbar span {
+    @apply h-2.5 w-2.5 rounded-full;
+    background: rgba(255, 255, 255, 0.28);
+  }
+
+  .marketing-mini-panel,
+  .marketing-mini-card {
+    @apply flex gap-4 rounded-[24px] border p-4;
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .marketing-stat-card {
+    @apply rounded-[24px] border p-4;
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .marketing-label {
+    @apply mb-2 block text-[11px] font-semibold uppercase tracking-[0.24em];
+    color: rgba(255, 255, 255, 0.56);
+  }
+
+  .marketing-hero-title {
+    @apply max-w-4xl text-5xl font-semibold leading-[0.98] tracking-[-0.06em] text-white sm:text-6xl lg:text-7xl;
+  }
+
+  .marketing-page-title {
+    @apply text-4xl font-semibold leading-tight tracking-[-0.05em] text-white sm:text-5xl;
+  }
+
+  .marketing-hero-description,
+  .marketing-page-description {
+    @apply max-w-3xl text-base leading-8 sm:text-lg;
+    color: rgba(255, 255, 255, 0.68);
+  }
+
+  .marketing-section-head {
+    @apply flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between;
+  }
+
+  .marketing-section-title {
+    @apply text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl;
+  }
+
+  .marketing-feature-card,
+  .marketing-pricing-card,
+  .marketing-section-card {
+    @apply rounded-[30px] p-6 sm:p-7;
+  }
+
+  .marketing-pricing-featured {
+    background:
+      linear-gradient(180deg, rgba(255, 138, 68, 0.13), rgba(10, 18, 24, 0.78)),
+      rgba(10, 18, 24, 0.72);
+  }
+
+  .marketing-icon-chip {
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-2xl;
+    background: rgba(255, 177, 96, 0.12);
+    color: #ffbf7d;
+    border: 1px solid rgba(255, 177, 96, 0.16);
+  }
+
+  .marketing-step-pill {
+    @apply inline-flex shrink-0 items-center justify-center rounded-full px-3 py-1 text-xs font-semibold;
+    background: rgba(54, 208, 187, 0.14);
+    color: #9dece0;
+    letter-spacing: 0.16em;
+  }
+
+  .marketing-workflow-row {
+    @apply rounded-[26px] px-5 py-5;
+  }
+
+  .marketing-contact-form {
+    @apply space-y-5;
+  }
+
+  .marketing-input {
+    @apply w-full rounded-[20px] border px-4 py-3.5 text-sm transition focus:outline-none;
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: #fff;
+  }
+
+  .marketing-input::placeholder {
+    color: rgba(255, 255, 255, 0.38);
+  }
+
+  .marketing-input:focus {
+    border-color: rgba(255, 180, 95, 0.45);
+    box-shadow: 0 0 0 4px rgba(255, 180, 95, 0.08);
+  }
+
+  .marketing-callout {
+    @apply flex flex-col gap-6 rounded-[34px] p-7 sm:p-8 lg:flex-row lg:items-end lg:justify-between;
+  }
+
+  .marketing-footer {
+    @apply flex flex-col gap-6 rounded-[28px] p-6 sm:p-7 lg:flex-row lg:items-end lg:justify-between;
+  }
+
   .app-shell {
     @apply min-h-screen;
     background:
