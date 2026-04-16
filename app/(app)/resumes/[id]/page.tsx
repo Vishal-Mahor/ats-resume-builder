@@ -1,11 +1,17 @@
 'use client';
 // app/resumes/[id]/page.tsx — Split-screen resume editor
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { api, type Resume, type ResumeContent, type UserSettings } from '@/lib/api';
+import { api, type Resume, type ResumeContent, type ResumeSkills, type Suggestion, type UserSettings } from '@/lib/api';
 import ResumePreview from '@/components/resume/ResumePreview';
 import ATSPanel from '@/components/ats/ATSPanel';
+import {
+  addSkillToResumeSkills,
+  normalizeResumeSkills,
+  removeSkillFromResumeSkills,
+  type NormalizedResumeSkills,
+} from '@/lib/skill-taxonomy';
 
 type Tab = 'resume' | 'cover';
 
@@ -19,6 +25,11 @@ export default function ResumeEditorPage() {
   const [content, setContent] = useState<ResumeContent | null>(null);
   const [coverLetter, setCoverLetter] = useState('');
   const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [atsScore, setAtsScore] = useState(0);
+  const [matchedKeywords, setMatchedKeywords] = useState<string[]>([]);
+  const [missingKeywords, setMissingKeywords] = useState<string[]>([]);
+  const [atsSuggestions, setAtsSuggestions] = useState<Suggestion[]>([]);
+  const [refreshingAts, setRefreshingAts] = useState(false);
 
   // Placeholder meta — in production, fetch from /profile
   const meta = {
@@ -40,6 +51,10 @@ export default function ResumeEditorPage() {
         setResume(r);
         setContent(r.resume_content);
         setCoverLetter(r.cover_letter);
+        setAtsScore(r.ats_score);
+        setMatchedKeywords(r.matched_keywords);
+        setMissingKeywords(r.missing_keywords);
+        setAtsSuggestions(r.suggestions);
       })
       .catch(() => toast.error('Failed to load resume'))
       .finally(() => setLoading(false));
@@ -49,7 +64,14 @@ export default function ResumeEditorPage() {
     if (!content) return;
     setSaving(true);
     try {
-      await api.resumes.update(id, { resume_content: content, cover_letter: coverLetter });
+      await api.resumes.update(id, {
+        resume_content: content,
+        cover_letter: coverLetter,
+        ats_score: atsScore,
+        matched_keywords: matchedKeywords,
+        missing_keywords: missingKeywords,
+        suggestions: atsSuggestions,
+      });
       toast.success('Saved!');
     } catch {
       toast.error('Save failed');
@@ -62,6 +84,38 @@ export default function ResumeEditorPage() {
     if (!content) return;
     setContent({ ...content, [section]: value });
   }
+
+  async function refreshAts(nextContent?: ResumeContent) {
+    const contentToCheck = nextContent || content;
+    if (!contentToCheck) return;
+
+    setRefreshingAts(true);
+    try {
+      const result = await api.resumes.refreshAts(id, contentToCheck);
+      setAtsScore(result.atsScore);
+      setMatchedKeywords(result.matchedKeywords);
+      setMissingKeywords(result.missingKeywords);
+      setAtsSuggestions(result.suggestions);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to refresh ATS score');
+    } finally {
+      setRefreshingAts(false);
+    }
+  }
+
+  async function handleAddKeyword(keyword: string) {
+    if (!content) return;
+
+    const nextSkills = addSkillToResumeSkills(content.skills, keyword);
+    const nextContent = { ...content, skills: nextSkills };
+    setContent(nextContent);
+    await refreshAts(nextContent);
+  }
+
+  const normalizedSkills = useMemo<NormalizedResumeSkills | null>(
+    () => (content ? normalizeResumeSkills(content.skills) : null),
+    [content]
+  );
 
   async function handleResumePdfDownload() {
     try {
@@ -135,25 +189,32 @@ export default function ResumeEditorPage() {
                   value={content.summary}
                   onChange={e => updateSection('summary', e.target.value)}
                   rows={4}
-                  className="w-full text-xs border border-gray-200 rounded-lg p-2.5 text-gray-700 resize-y focus:outline-none focus:border-emerald-400"
+                  className="w-full text-xs border border-gray-200 rounded-lg p-2.5 text-gray-700 placeholder:text-gray-400 resize-y focus:outline-none focus:border-emerald-400"
                 />
               </SectionEditor>
 
               <SectionEditor title="Skills" open={openSection === 'skills'} onToggle={() => setOpenSection(o => o === 'skills' ? null : 'skills')}>
-                <SkillsEditor
-                  skills={[...content.skills.technical, ...content.skills.tools, ...content.skills.other]}
-                  onChange={skills => updateSection('skills', { technical: skills, tools: [], other: [] })}
-                />
+                {normalizedSkills ? (
+                  <SkillsSectionEditor
+                    skills={normalizedSkills}
+                    onRemove={(skill, group) => {
+                      const nextSkills = removeSkillFromResumeSkills(content.skills, skill, group);
+                      const nextContent = { ...content, skills: nextSkills };
+                      setContent(nextContent);
+                      void refreshAts(nextContent);
+                    }}
+                  />
+                ) : null}
               </SectionEditor>
 
               <SectionEditor title="Experience" open={openSection === 'experience'} onToggle={() => setOpenSection(o => o === 'experience' ? null : 'experience')}>
                 {content.experience.map((exp, i) => (
                   <div key={i} className="mb-3 pb-3 border-b border-gray-100 last:border-b-0">
-                    <input className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 mb-1.5 focus:outline-none focus:border-emerald-400" value={exp.job_title}
+                    <input className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 mb-1.5 text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-emerald-400" value={exp.job_title}
                       onChange={e => { const exps=[...content.experience]; exps[i]={...exps[i],job_title:e.target.value}; updateSection('experience',exps); }} />
                     <input className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 mb-1.5 text-gray-500 focus:outline-none focus:border-emerald-400" value={exp.company}
                       onChange={e => { const exps=[...content.experience]; exps[i]={...exps[i],company:e.target.value}; updateSection('experience',exps); }} />
-                    <textarea className="w-full text-xs border border-gray-200 rounded-lg p-2.5 resize-y focus:outline-none focus:border-emerald-400" rows={4}
+                    <textarea className="w-full text-xs border border-gray-200 rounded-lg p-2.5 text-gray-700 placeholder:text-gray-400 resize-y focus:outline-none focus:border-emerald-400" rows={4}
                       value={exp.bullets.join('\n')}
                       onChange={e => { const exps=[...content.experience]; exps[i]={...exps[i],bullets:e.target.value.split('\n')}; updateSection('experience',exps); }} />
                   </div>
@@ -163,13 +224,13 @@ export default function ResumeEditorPage() {
               <SectionEditor title="Projects" open={openSection === 'projects'} onToggle={() => setOpenSection(o => o === 'projects' ? null : 'projects')}>
                 {content.projects.map((p, i) => (
                   <div key={i} className="mb-3 pb-3 border-b border-gray-100 last:border-b-0">
-                    <input className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 mb-1.5 font-medium focus:outline-none focus:border-emerald-400" value={p.name}
+                    <input className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 mb-1.5 font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-emerald-400" value={p.name}
                       onChange={e => { const ps=[...content.projects]; ps[i]={...ps[i],name:e.target.value}; updateSection('projects',ps); }} />
                     <input className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 mb-1.5 text-gray-500 focus:outline-none focus:border-emerald-400" value={p.tech_stack}
                       onChange={e => { const ps=[...content.projects]; ps[i]={...ps[i],tech_stack:e.target.value}; updateSection('projects',ps); }} />
-                    <textarea className="w-full text-xs border border-gray-200 rounded-lg p-2.5 resize-y focus:outline-none focus:border-emerald-400" rows={2}
-                      value={p.description}
-                      onChange={e => { const ps=[...content.projects]; ps[i]={...ps[i],description:e.target.value}; updateSection('projects',ps); }} />
+                    <textarea className="w-full text-xs border border-gray-200 rounded-lg p-2.5 text-gray-700 placeholder:text-gray-400 resize-y focus:outline-none focus:border-emerald-400" rows={2}
+                      value={p.bullets?.length ? p.bullets.join('\n') : (p.description || p.summary || '')}
+                      onChange={e => { const ps=[...content.projects]; ps[i]={...ps[i],description:e.target.value, bullets:e.target.value.split('\n').filter(Boolean)}; updateSection('projects',ps); }} />
                   </div>
                 ))}
               </SectionEditor>
@@ -177,11 +238,11 @@ export default function ResumeEditorPage() {
               <SectionEditor title="Education" open={openSection === 'education'} onToggle={() => setOpenSection(o => o === 'education' ? null : 'education')}>
                 {content.education.map((edu, i) => (
                   <div key={i} className="grid grid-cols-2 gap-1.5 mb-2">
-                    <input className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 col-span-2 focus:outline-none focus:border-emerald-400" value={edu.degree}
+                    <input className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 col-span-2 text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-emerald-400" value={edu.degree}
                       onChange={e => { const edus=[...content.education]; edus[i]={...edus[i],degree:e.target.value}; updateSection('education',edus); }} />
-                    <input className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400" value={edu.institution}
+                    <input className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-emerald-400" value={edu.institution}
                       onChange={e => { const edus=[...content.education]; edus[i]={...edus[i],institution:e.target.value}; updateSection('education',edus); }} />
-                    <input className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400" value={edu.year}
+                    <input className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-emerald-400" value={edu.year}
                       onChange={e => { const edus=[...content.education]; edus[i]={...edus[i],year:e.target.value}; updateSection('education',edus); }} />
                   </div>
                 ))}
@@ -193,7 +254,7 @@ export default function ResumeEditorPage() {
                 <label className="text-xs font-medium text-gray-600 mb-1.5 block">Tone</label>
                 <select
                   value={resume.cover_letter_tone}
-                  className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:border-emerald-400 bg-white"
+                  className="w-full text-xs border border-gray-200 rounded-lg bg-white px-2.5 py-2 text-gray-700 focus:outline-none focus:border-emerald-400"
                 >
                   <option value="formal">Formal</option>
                   <option value="modern">Modern</option>
@@ -204,7 +265,7 @@ export default function ResumeEditorPage() {
                 value={coverLetter}
                 onChange={e => setCoverLetter(e.target.value)}
                 rows={20}
-                className="w-full text-xs border border-gray-200 rounded-lg p-3 resize-y focus:outline-none focus:border-emerald-400 font-mono leading-relaxed"
+                className="w-full text-xs border border-gray-200 rounded-lg p-3 text-gray-700 placeholder:text-gray-400 resize-y font-mono leading-relaxed focus:outline-none focus:border-emerald-400"
               />
               <button
                 type="button"
@@ -234,12 +295,15 @@ export default function ResumeEditorPage() {
 
       {/* ── Right: ATS Panel ─────────────────────────────── */}
       <ATSPanel
-        score={resume.ats_score}
-        matchedKeywords={resume.matched_keywords}
-        missingKeywords={resume.missing_keywords}
-        suggestions={resume.suggestions}
+        score={atsScore}
+        matchedKeywords={matchedKeywords}
+        missingKeywords={missingKeywords}
+        suggestions={atsSuggestions}
         companyName={resume.company_name}
         jobTitle={resume.job_title}
+        refreshing={refreshingAts}
+        onRefresh={() => void refreshAts()}
+        onAddKeyword={(keyword) => void handleAddKeyword(keyword)}
       />
     </div>
   );
@@ -288,8 +352,56 @@ function SkillsEditor({ skills, onChange }: { skills: string[]; onChange: (s: st
           }
         }}
         placeholder="Add skill..."
-        className="border-none outline-none text-[11px] bg-transparent flex-1 min-w-[80px]"
+        className="min-w-[80px] flex-1 border-none bg-transparent text-[11px] text-gray-700 outline-none placeholder:text-gray-400"
       />
+    </div>
+  );
+}
+
+function SkillsSectionEditor({
+  skills,
+  onRemove,
+}: {
+  skills: NormalizedResumeSkills;
+  onRemove: (skill: string, group: keyof NormalizedResumeSkills['technical'] | 'soft') => void;
+}) {
+  const groups: Array<{ label: string; key: keyof NormalizedResumeSkills['technical'] | 'soft'; values: string[] }> = [
+    { label: 'Programming Languages', key: 'programming_languages', values: skills.technical.programming_languages },
+    { label: 'Frameworks', key: 'frameworks', values: skills.technical.frameworks },
+    { label: 'Cloud', key: 'cloud', values: skills.technical.cloud },
+    { label: 'Databases', key: 'databases', values: skills.technical.databases },
+    { label: 'Tools', key: 'tools', values: skills.technical.tools },
+    { label: 'Other Technical', key: 'other', values: skills.technical.other },
+    { label: 'Soft Skills', key: 'soft', values: skills.soft },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-5 text-gray-500">
+        Add missing skills from the ATS panel with one click. Remove any skill here if it does not belong in the resume.
+      </p>
+      {groups.map((group) => (
+        <div key={group.key} className="rounded-xl border border-gray-200 p-3">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">{group.label}</div>
+          <div className="flex flex-wrap gap-2">
+            {group.values.length > 0 ? (
+              group.values.map((skill) => (
+                <button
+                  key={`${group.key}-${skill}`}
+                  type="button"
+                  onClick={() => onRemove(skill, group.key)}
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 transition hover:bg-rose-50 hover:text-rose-700"
+                >
+                  {skill}
+                  <span className="text-[10px] font-semibold">×</span>
+                </button>
+              ))
+            ) : (
+              <span className="text-[11px] text-gray-400">No skills added yet.</span>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

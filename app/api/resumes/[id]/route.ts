@@ -35,6 +35,10 @@ export async function PUT(request: Request, context: RouteContext) {
       resume_content?: unknown;
       cover_letter?: string;
       status?: string;
+      ats_score?: number;
+      matched_keywords?: string[];
+      missing_keywords?: string[];
+      suggestions?: unknown[];
     };
 
     const {
@@ -44,9 +48,23 @@ export async function PUT(request: Request, context: RouteContext) {
          resume_content = COALESCE($1, resume_content),
          cover_letter   = COALESCE($2, cover_letter),
          status         = COALESCE($3, status),
+         ats_score      = COALESCE($4, ats_score),
+         matched_keywords = COALESCE($5, matched_keywords),
+         missing_keywords = COALESCE($6, missing_keywords),
+         suggestions      = COALESCE($7, suggestions),
          updated_at     = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-       WHERE id=$4 AND user_id=$5 RETURNING *`,
-      [body.resume_content ? JSON.stringify(body.resume_content) : null, body.cover_letter, body.status, id, userId]
+       WHERE id=$8 AND user_id=$9 RETURNING *`,
+      [
+        body.resume_content ? JSON.stringify(body.resume_content) : null,
+        body.cover_letter,
+        body.status,
+        body.ats_score ?? null,
+        body.matched_keywords ? JSON.stringify(body.matched_keywords) : null,
+        body.missing_keywords ? JSON.stringify(body.missing_keywords) : null,
+        body.suggestions ? JSON.stringify(body.suggestions) : null,
+        id,
+        userId,
+      ]
     );
 
     if (!resume) {

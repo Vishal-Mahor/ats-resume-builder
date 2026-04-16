@@ -220,6 +220,11 @@ export const api = {
     get:    (id: string) => request<Resume>(`/api/resumes/${id}`),
     update: (id: string, data: Partial<Resume>) =>
       request<Resume>(`/api/resumes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    refreshAts: (id: string, resumeContent: ResumeContent) =>
+      request<AtsRefreshResult>(`/api/resumes/${id}/ats-refresh`, {
+        method: 'POST',
+        body: JSON.stringify({ resume_content: resumeContent }),
+      }),
     delete: (id: string) => request<void>(`/api/resumes/${id}`, { method: 'DELETE' }),
     downloadPdf:      (id: string) => downloadFile(`/api/resumes/${id}/pdf`, `resume-${id}.pdf`),
     downloadCoverPdf: (id: string) => downloadFile(`/api/resumes/${id}/cover-pdf`, `cover-letter-${id}.pdf`),
@@ -350,13 +355,42 @@ export interface DashboardSummary {
 
 export interface ResumeContent {
   summary: string;
-  skills: { technical: string[]; tools: string[]; other: string[] };
+  skills: ResumeSkills;
   experience: Array<{
     job_title: string; company: string; location?: string;
     start_date: string; end_date?: string; is_current?: boolean; bullets: string[];
   }>;
-  projects: Array<{ name: string; tech_stack: string; description: string; url?: string }>;
-  education: Array<{ degree: string; institution: string; year: string; gpa?: string }>;
+  projects: Array<{
+    name: string;
+    tech_stack: string;
+    description?: string;
+    summary?: string;
+    bullets?: string[];
+    url?: string;
+  }>;
+  education: Array<{
+    degree: string;
+    institution: string;
+    year: string;
+    gpa?: string;
+    bullets?: string[];
+  }>;
+}
+
+export interface ResumeSkills {
+  technical:
+    | string[]
+    | {
+        programming_languages?: string[];
+        frameworks?: string[];
+        cloud?: string[];
+        databases?: string[];
+        tools?: string[];
+        other?: string[];
+      };
+  tools?: string[];
+  other?: string[];
+  soft?: string[];
 }
 
 export interface ResumeTemplate {
@@ -441,6 +475,13 @@ export interface BillingSnapshot {
 
 export interface Suggestion {
   action: string; impact_pct: number; reason: string;
+}
+
+export interface AtsRefreshResult {
+  atsScore: number;
+  matchedKeywords: string[];
+  missingKeywords: string[];
+  suggestions: Suggestion[];
 }
 
 export interface GeneratePayload {

@@ -3,7 +3,7 @@
 // ResumePreview — ATS-clean live preview (print-ready HTML)
 // ============================================================
 import React from 'react';
-import type { ResumeContent } from '@/lib/api';
+import type { ResumeContent, ResumeSkills } from '@/lib/api';
 
 interface ResumePreviewProps {
   meta: { name: string; email: string; phone?: string; location?: string; linkedin?: string; github?: string };
@@ -14,11 +14,9 @@ export default function ResumePreview({ meta, content }: ResumePreviewProps) {
   const contact = [meta.email, meta.phone, meta.linkedin, meta.github, meta.location]
     .filter(Boolean).join(' | ');
 
-  const allSkills = [
-    ...(content.skills?.technical || []),
-    ...(content.skills?.tools || []),
-    ...(content.skills?.other || []),
-  ];
+  const skillGroups = getSkillGroups(content.skills);
+  const technicalSkillGroups = skillGroups.filter((group) => group.type === 'technical' && group.values.length > 0);
+  const softSkillGroup = skillGroups.find((group) => group.type === 'soft' && group.values.length > 0);
 
   return (
     <div
@@ -51,10 +49,21 @@ export default function ResumePreview({ meta, content }: ResumePreviewProps) {
       )}
 
       {/* Skills */}
-      {allSkills.length > 0 && (
+      {technicalSkillGroups.length > 0 && (
         <>
           <SectionTitle>Skills</SectionTitle>
-          <p style={{ fontSize: '10pt', marginBottom: 4 }}>{allSkills.join(' • ')}</p>
+          <div style={{ fontSize: '10pt', marginBottom: 4 }}>
+            {technicalSkillGroups.map((group) => (
+              <p key={group.label} style={{ marginBottom: 3 }}>
+                <strong>{group.label}:</strong> {group.values.join(' • ')}
+              </p>
+            ))}
+            {softSkillGroup ? (
+              <p style={{ marginBottom: 0 }}>
+                <strong>{softSkillGroup.label}:</strong> {softSkillGroup.values.join(' • ')}
+              </p>
+            ) : null}
+          </div>
         </>
       )}
 
@@ -91,8 +100,13 @@ export default function ResumePreview({ meta, content }: ResumePreviewProps) {
                 <span style={{ fontFamily: 'Arial', fontSize: '10.5pt', fontWeight: 700 }}>{p.name}</span>
                 <span style={{ fontSize: '9.5pt', color: '#666', fontStyle: 'italic' }}>{p.tech_stack}</span>
               </div>
+              {p.summary ? (
+                <div style={{ fontSize: '10pt', color: '#444', marginBottom: 3 }}>{p.summary}</div>
+              ) : null}
               <ul style={{ paddingLeft: 14, margin: 0 }}>
-                <li style={{ fontSize: '10.5pt', marginBottom: 2 }}>{p.description}</li>
+                {getProjectBullets(p).map((bullet, bulletIndex) => (
+                  <li key={bulletIndex} style={{ fontSize: '10.5pt', marginBottom: 2 }}>{bullet}</li>
+                ))}
               </ul>
             </div>
           ))}
@@ -112,12 +126,59 @@ export default function ResumePreview({ meta, content }: ResumePreviewProps) {
               <div style={{ fontSize: '10pt', color: '#444' }}>
                 {e.institution}{e.gpa ? ` | GPA: ${e.gpa}` : ''}
               </div>
+              {e.bullets?.length ? (
+                <ul style={{ paddingLeft: 14, margin: '3px 0 0' }}>
+                  {e.bullets.map((bullet, bulletIndex) => (
+                    <li key={bulletIndex} style={{ fontSize: '10.5pt', marginBottom: 2 }}>{bullet}</li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           ))}
         </>
       )}
     </div>
   );
+}
+
+function getSkillGroups(skills: ResumeSkills | undefined) {
+  if (!skills) return [];
+
+  if (Array.isArray(skills.technical)) {
+    return [
+      { label: 'Technical', values: skills.technical, type: 'technical' as const },
+      { label: 'Tools', values: skills.tools || [], type: 'technical' as const },
+      { label: 'Other', values: skills.other || [], type: 'technical' as const },
+      { label: 'Soft Skills', values: skills.soft || [], type: 'soft' as const },
+    ].filter((group) => group.values.length > 0);
+  }
+
+  const technical = skills.technical || {};
+  return [
+    { label: 'Programming Languages', values: technical.programming_languages || [], type: 'technical' as const },
+    { label: 'Frameworks', values: technical.frameworks || [], type: 'technical' as const },
+    { label: 'Cloud', values: technical.cloud || [], type: 'technical' as const },
+    { label: 'Databases', values: technical.databases || [], type: 'technical' as const },
+    { label: 'Tools', values: technical.tools || [], type: 'technical' as const },
+    { label: 'Other Technical', values: technical.other || [], type: 'technical' as const },
+    { label: 'Soft Skills', values: skills.soft || [], type: 'soft' as const },
+  ].filter((group) => group.values.length > 0);
+}
+
+function getProjectBullets(project: ResumeContent['projects'][number]) {
+  if (project.bullets?.length) {
+    return project.bullets;
+  }
+
+  if (project.description) {
+    return [project.description];
+  }
+
+  if (project.summary) {
+    return [project.summary];
+  }
+
+  return [];
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {

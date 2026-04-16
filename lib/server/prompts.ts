@@ -77,18 +77,29 @@ STRICT RULES:
 1. Use strong action verbs: Built, Led, Designed, Optimized, Shipped, Reduced, Increased, Automated
 2. Quantify every achievement: "reduced latency by 40%", "served 2M+ requests/day"
 3. Include matched_keywords naturally in bullets — do NOT keyword stuff
-4. Summary must be 2-3 sentences max, tailored to ${jobTitle}
-5. Bullets: 1-2 lines each, start with action verb, include metric
+4. Summary must be 2-3 sentences max, tailored to ${jobTitle}, and persuasive to both ATS and the hiring manager
+5. Summary should position the candidate with domain fit, years/scope of impact, and strongest differentiators from the profile
+6. Bullets: 1-2 lines each, start with action verb, include metric or outcome whenever credible
 6. NO tables, NO columns, NO images — ATS plain text structure
 7. Prioritize experiences most relevant to ${companyName}'s domain
+8. Split skills into clear buckets. Technical skills must be categorized into the best matching domain: programming_languages, frameworks, cloud, databases, tools, or other
+9. Soft skills should be separate from technical skills
+10. For projects and education, use bullet points for clarity instead of dense paragraphs
+11. Do not invent experience, employers, degrees, or metrics that are not reasonably supported by the candidate profile. You may tighten wording and infer phrasing, but stay grounded.
 
 Return ONLY valid JSON:
 {
   "summary": "string",
   "skills": {
-    "technical": ["React", "Node.js"],
-    "tools": ["Docker", "AWS"],
-    "other": []
+    "technical": {
+      "programming_languages": ["Python", "TypeScript"],
+      "frameworks": ["React", "FastAPI"],
+      "cloud": ["AWS", "GCP"],
+      "databases": ["PostgreSQL", "MongoDB"],
+      "tools": ["Docker", "Git", "Terraform"],
+      "other": ["REST APIs", "Microservices"]
+    },
+    "soft": ["Stakeholder communication", "Mentoring", "Cross-functional collaboration"]
   },
   "experience": [
     {
@@ -107,7 +118,11 @@ Return ONLY valid JSON:
     {
       "name": "string",
       "tech_stack": "React, Node.js, Redis",
-      "description": "Built X achieving Y metric",
+      "summary": "Optional one-line project context",
+      "bullets": [
+        "Built X achieving Y metric",
+        "Improved Z by 35% using A and B"
+      ],
       "url": "string|null"
     }
   ],
@@ -116,7 +131,11 @@ Return ONLY valid JSON:
       "degree": "B.Tech Computer Science",
       "institution": "IIT Bombay",
       "year": "2022",
-      "gpa": "8.7/10"
+      "gpa": "8.7/10",
+      "bullets": [
+        "Relevant coursework: Data Structures, Operating Systems, Machine Learning",
+        "Capstone focused on scalable recommendation systems"
+      ]
     }
   ]
 }

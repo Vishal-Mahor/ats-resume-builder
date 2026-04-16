@@ -450,6 +450,77 @@
   .score-low {
     @apply app-score-low;
   }
+
+  .resume-generation-modal {
+    @apply fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6;
+  }
+
+  .resume-generation-backdrop {
+    @apply absolute inset-0;
+    background: rgba(4, 7, 10, 0.74);
+    backdrop-filter: blur(18px);
+  }
+
+  .resume-generation-dialog {
+    @apply relative z-[1] flex max-h-[calc(100vh-2rem)] w-full max-w-[1380px] flex-col overflow-hidden rounded-[30px] border;
+    background: linear-gradient(180deg, rgba(16, 16, 17, 0.98), rgba(12, 12, 13, 0.98));
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 32px 120px rgba(0, 0, 0, 0.55);
+  }
+
+  .resume-generation-spinner {
+    @apply relative flex h-36 w-36 items-center justify-center rounded-full;
+    background:
+      radial-gradient(circle at center, rgba(243, 164, 59, 0.2) 0, rgba(243, 164, 59, 0.02) 46%, transparent 58%);
+  }
+
+  .resume-generation-ring {
+    @apply absolute rounded-full border;
+    border-color: rgba(243, 164, 59, 0.16);
+    border-top-color: var(--accent);
+  }
+
+  .resume-generation-ring-outer {
+    @apply h-36 w-36 animate-spin;
+    animation-duration: 2.4s;
+  }
+
+  .resume-generation-ring-middle {
+    @apply h-24 w-24 animate-spin;
+    animation-direction: reverse;
+    animation-duration: 1.8s;
+  }
+
+  .resume-generation-ring-inner {
+    @apply h-12 w-12 animate-spin;
+    animation-duration: 1.2s;
+  }
+
+  .resume-generation-step {
+    @apply h-1.5 w-16 overflow-hidden rounded-full;
+    background: rgba(255, 255, 255, 0.08);
+    position: relative;
+  }
+
+  .resume-generation-step::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: 42%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, rgba(243, 164, 59, 0.8), transparent);
+    animation: resume-generation-pulse 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes resume-generation-pulse {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(250%);
+  }
 }
 
 ::-webkit-scrollbar {

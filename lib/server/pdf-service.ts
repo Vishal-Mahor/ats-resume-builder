@@ -2,7 +2,21 @@ import puppeteer from 'puppeteer';
 
 export interface ResumeContent {
   summary: string;
-  skills: { technical: string[]; tools: string[]; other: string[] };
+  skills: {
+    technical:
+      | string[]
+      | {
+          programming_languages?: string[];
+          frameworks?: string[];
+          cloud?: string[];
+          databases?: string[];
+          tools?: string[];
+          other?: string[];
+        };
+    tools?: string[];
+    other?: string[];
+    soft?: string[];
+  };
   experience: Array<{
     job_title: string;
     company: string;
@@ -11,8 +25,8 @@ export interface ResumeContent {
     end_date: string;
     bullets: string[];
   }>;
-  projects: Array<{ name: string; tech_stack: string; description: string; url?: string }>;
-  education: Array<{ degree: string; institution: string; year: string; gpa?: string }>;
+  projects: Array<{ name: string; tech_stack: string; description?: string; summary?: string; bullets?: string[]; url?: string }>;
+  education: Array<{ degree: string; institution: string; year: string; gpa?: string; bullets?: string[] }>;
 }
 
 export interface UserMeta {
@@ -25,7 +39,7 @@ export interface UserMeta {
 }
 
 function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
-  const skills = [...content.skills.technical, ...content.skills.tools, ...content.skills.other].join(' • ');
+  const skillGroups = getSkillGroups(content.skills);
 
   const experienceHtml = content.experience
     .map(
@@ -52,7 +66,8 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
         <span class="entry-title">${project.name}</span>
         <span class="entry-sub-inline">${project.tech_stack}</span>
       </div>
-      <ul><li>${project.description}</li></ul>
+      ${project.summary ? `<div class="entry-sub">${project.summary}</div>` : ''}
+      <ul>${getProjectBullets(project).map((bullet) => `<li>${bullet}</li>`).join('')}</ul>
     </div>
   `
     )
@@ -67,6 +82,7 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
         <span class="entry-date">${entry.year}</span>
       </div>
       <div class="entry-sub">${entry.institution}${entry.gpa ? ` | GPA: ${entry.gpa}` : ''}</div>
+      ${entry.bullets?.length ? `<ul>${entry.bullets.map((bullet) => `<li>${bullet}</li>`).join('')}</ul>` : ''}
     </div>
   `
     )
@@ -138,7 +154,7 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
   <p class="summary">${content.summary}</p>
 
   <div class="section-title">Skills</div>
-  <p class="skills-line">${skills}</p>
+  ${skillGroups.map((group) => `<p class="skills-line"><strong>${group.label}:</strong> ${group.values.join(' • ')}</p>`).join('')}
 
   <div class="section-title">Experience</div>
   ${experienceHtml}
@@ -150,6 +166,44 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
   ${educationHtml}
 </body>
 </html>`;
+}
+
+function getSkillGroups(skills: ResumeContent['skills']) {
+  if (Array.isArray(skills.technical)) {
+    return [
+      { label: 'Technical', values: skills.technical },
+      { label: 'Tools', values: skills.tools || [] },
+      { label: 'Other', values: skills.other || [] },
+      { label: 'Soft Skills', values: skills.soft || [] },
+    ].filter((group) => group.values.length > 0);
+  }
+
+  const technical = skills.technical || {};
+  return [
+    { label: 'Programming Languages', values: technical.programming_languages || [] },
+    { label: 'Frameworks', values: technical.frameworks || [] },
+    { label: 'Cloud', values: technical.cloud || [] },
+    { label: 'Databases', values: technical.databases || [] },
+    { label: 'Tools', values: technical.tools || [] },
+    { label: 'Other Technical', values: technical.other || [] },
+    { label: 'Soft Skills', values: skills.soft || [] },
+  ].filter((group) => group.values.length > 0);
+}
+
+function getProjectBullets(project: ResumeContent['projects'][number]) {
+  if (project.bullets?.length) {
+    return project.bullets;
+  }
+
+  if (project.description) {
+    return [project.description];
+  }
+
+  if (project.summary) {
+    return [project.summary];
+  }
+
+  return [];
 }
 
 export async function generateResumePdf(meta: UserMeta, content: ResumeContent) {
