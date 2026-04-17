@@ -71,9 +71,6 @@ export default function FeaturesPage() {
             <Link href="/pricing" className="marketing-button-ghost">
               Compare plans
             </Link>
-            <Link href="/auth/signin" className="marketing-button-primary">
-              Get started
-            </Link>
           </div>
         </div>
       </section>

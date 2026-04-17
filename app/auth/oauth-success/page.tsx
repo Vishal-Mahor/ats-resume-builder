@@ -61,11 +61,11 @@ export default function OAuthSuccessPage() {
   }, [router]);
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#030711] text-white">
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,#040816_0%,#071120_48%,#02040b_100%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(56,189,248,0.18),transparent_22%),radial-gradient(circle_at_82%_18%,rgba(168,85,247,0.18),transparent_24%),radial-gradient(circle_at_48%_78%,rgba(16,185,129,0.12),transparent_26%)]" />
-      <div className="relative flex items-center gap-3 rounded-3xl border border-white/10 bg-white/6 px-6 py-4 shadow-[0_22px_60px_rgba(1,4,12,0.42)] backdrop-blur-md">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-cyan-300" />
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050b14] text-white">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(83,129,169,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(83,129,169,0.07)_1px,transparent_1px),linear-gradient(180deg,#060d16_0%,#091524_48%,#050b14_100%)] [background-size:36px_36px,36px_36px,auto]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(34,211,238,0.18),transparent_22%),radial-gradient(circle_at_82%_18%,rgba(99,102,241,0.18),transparent_24%),radial-gradient(circle_at_48%_78%,rgba(45,212,191,0.1),transparent_26%)]" />
+      <div className="relative flex items-center gap-3 rounded-[18px] border border-white/10 bg-white/6 px-6 py-4 shadow-[0_22px_60px_rgba(1,4,12,0.42)] backdrop-blur-md">
+        <div className="h-5 w-5 animate-spin rounded-[10px] border-2 border-white/20 border-t-[var(--accent)]" />
         <span className="text-sm text-slate-200">Finishing secure sign-in...</span>
       </div>
     </main>

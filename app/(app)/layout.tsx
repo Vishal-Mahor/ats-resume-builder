@@ -207,7 +207,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         >
           <div className="mb-6 flex items-center justify-between gap-3 px-2">
             <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl text-lg font-semibold" style={{ background: '#1f8fff', color: '#07121d' }}>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl text-lg font-semibold" style={{ background: 'linear-gradient(135deg, #22d3ee, #6366f1)', color: '#06111d', boxShadow: '0 0 28px rgba(34,211,238,0.22)' }}>
                 A
               </div>
               {!collapsed && (
@@ -218,11 +218,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               )}
             </Link>
 
-            <button
-              type="button"
-              onClick={() => setCollapsed((current) => !current)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border transition"
-              style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)', color: 'var(--text-secondary)' }}
+              <button
+                type="button"
+                onClick={() => setCollapsed((current) => !current)}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border transition"
+                style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)', color: 'var(--text-secondary)' }}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
               <ChevronIcon collapsed={collapsed} />
@@ -283,8 +283,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b px-5 py-4 backdrop-blur-xl sm:px-7" style={{ borderColor: 'var(--border-subtle)', background: 'rgba(10,10,11,0.94)' }}>
-            <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
+          <header className="sticky top-0 z-20 border-b px-5 py-4 backdrop-blur-xl sm:px-7" style={{ borderColor: 'var(--border-subtle)', background: 'rgba(6,14,24,0.88)' }}>
+            <div className="flex w-full items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -326,7 +326,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     {unreadNotifications > 0 && (
                       <span
                         className="absolute -right-1 -top-1 min-w-[20px] rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 text-white"
-                        style={{ background: '#ef4444' }}
+                        style={{ background: 'linear-gradient(135deg, #fb7185, #f97316)' }}
                       >
                         {unreadNotifications > 99 ? '99+' : unreadNotifications}
                       </span>
@@ -365,7 +365,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="text-sm font-semibold text-[var(--text-primary)]">{notification.title}</div>
-                                {!notification.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#1f8fff]" />}
+                                {!notification.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--accent)]" />}
                               </div>
                               <div className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{notification.message}</div>
                               <div className="mt-2 text-[10px] uppercase tracking-[0.18em] text-[var(--text-dim)]">
@@ -417,7 +417,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)' }}
                     aria-label="Open account menu"
                   >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold" style={{ background: '#1f8fff', color: '#07121d' }}>
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold" style={{ background: 'linear-gradient(135deg, #22d3ee, #6366f1)', color: '#06111d', boxShadow: '0 0 28px rgba(34,211,238,0.22)' }}>
                       {initials}
                     </div>
                   </button>
@@ -427,7 +427,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </header>
 
           <main className="flex-1 px-4 py-5 sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-7xl">{children}</div>
+            <div className="w-full">{children}</div>
           </main>
         </div>
       </div>
@@ -446,7 +446,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <div className="mb-6 flex items-center justify-between gap-3 px-2">
               <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl text-lg font-semibold" style={{ background: '#1f8fff', color: '#07121d' }}>
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl text-lg font-semibold" style={{ background: 'linear-gradient(135deg, #22d3ee, #6366f1)', color: '#06111d', boxShadow: '0 0 28px rgba(34,211,238,0.22)' }}>
                   A
                 </div>
                 <div className="min-w-0">

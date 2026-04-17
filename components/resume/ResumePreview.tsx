@@ -44,7 +44,7 @@ export default function ResumePreview({ meta, content }: ResumePreviewProps) {
       {content.summary && (
         <>
           <SectionTitle>Summary</SectionTitle>
-          <p style={{ fontSize: '10.5pt', marginBottom: 4 }}>{content.summary}</p>
+          <p style={{ fontSize: '10.5pt', marginBottom: 4 }}>{compactSummaryForDisplay(content.summary)}</p>
         </>
       )}
 
@@ -113,12 +113,24 @@ export default function ResumePreview({ meta, content }: ResumePreviewProps) {
         </>
       )}
 
+      {/* Achievements */}
+      {content.achievements?.length ? (
+        <>
+          <SectionTitle>Achievements</SectionTitle>
+          <ul style={{ paddingLeft: 14, margin: 0 }}>
+            {content.achievements.map((item, index) => (
+              <li key={index} style={{ fontSize: '10.5pt', marginBottom: 2 }}>{item}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
       {/* Education */}
       {content.education?.length > 0 && (
         <>
           <SectionTitle>Education</SectionTitle>
           {content.education.map((e, i) => (
-            <div key={i} style={{ marginBottom: 8 }}>
+            <div key={i} style={{ marginBottom: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span style={{ fontFamily: 'Arial', fontSize: '10.5pt', fontWeight: 700 }}>{e.degree}</span>
                 <span style={{ fontSize: '9.5pt', color: '#444' }}>{e.year}</span>
@@ -126,17 +138,26 @@ export default function ResumePreview({ meta, content }: ResumePreviewProps) {
               <div style={{ fontSize: '10pt', color: '#444' }}>
                 {e.institution}{e.gpa ? ` | GPA: ${e.gpa}` : ''}
               </div>
-              {e.bullets?.length ? (
-                <ul style={{ paddingLeft: 14, margin: '3px 0 0' }}>
-                  {e.bullets.map((bullet, bulletIndex) => (
-                    <li key={bulletIndex} style={{ fontSize: '10.5pt', marginBottom: 2 }}>{bullet}</li>
-                  ))}
-                </ul>
-              ) : null}
             </div>
           ))}
         </>
       )}
+
+      {/* Languages */}
+      {content.languages?.length ? (
+        <>
+          <SectionTitle>Languages</SectionTitle>
+          <p style={{ fontSize: '10pt', marginBottom: 4 }}>{content.languages.join(', ')}</p>
+        </>
+      ) : null}
+
+      {/* Hobbies */}
+      {content.hobbies?.length ? (
+        <>
+          <SectionTitle>Hobbies</SectionTitle>
+          <p style={{ fontSize: '10pt', marginBottom: 4 }}>{content.hobbies.join(', ')}</p>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -155,14 +176,22 @@ function getSkillGroups(skills: ResumeSkills | undefined) {
 
   const technical = skills.technical || {};
   return [
-    { label: 'Programming Languages', values: technical.programming_languages || [], type: 'technical' as const },
-    { label: 'Frameworks', values: technical.frameworks || [], type: 'technical' as const },
-    { label: 'Cloud', values: technical.cloud || [], type: 'technical' as const },
-    { label: 'Databases', values: technical.databases || [], type: 'technical' as const },
-    { label: 'Tools', values: technical.tools || [], type: 'technical' as const },
+    { label: 'Languages', values: technical.languages || technical.programming_languages || [], type: 'technical' as const },
+    { label: 'Backend / Frameworks', values: technical.backend_frameworks || technical.frameworks || [], type: 'technical' as const },
+    { label: 'AI / GenAI', values: technical.ai_genai || [], type: 'technical' as const },
+    { label: 'Streaming / Messaging', values: technical.streaming_messaging || [], type: 'technical' as const },
+    { label: 'Databases / Storage', values: technical.databases_storage || technical.databases || [], type: 'technical' as const },
+    { label: 'Cloud / Infra', values: technical.cloud_infra || technical.cloud || [], type: 'technical' as const },
+    { label: 'Tools / Platforms', values: technical.tools_platforms || technical.tools || [], type: 'technical' as const },
     { label: 'Other Technical', values: technical.other || [], type: 'technical' as const },
     { label: 'Soft Skills', values: skills.soft || [], type: 'soft' as const },
   ].filter((group) => group.values.length > 0);
+}
+
+function compactSummaryForDisplay(value: string) {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 110) return value.trim();
+  return `${words.slice(0, 110).join(' ')}...`;
 }
 
 function getProjectBullets(project: ResumeContent['projects'][number]) {

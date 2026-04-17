@@ -225,6 +225,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ resume_content: resumeContent }),
       }),
+    aiImprove: (id: string, payload: { resume_content: ResumeContent; focus_text?: string }) =>
+      request<AiImproveResult>(`/api/resumes/${id}/ai-improve`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
     delete: (id: string) => request<void>(`/api/resumes/${id}`, { method: 'DELETE' }),
     downloadPdf:      (id: string) => downloadFile(`/api/resumes/${id}/pdf`, `resume-${id}.pdf`),
     downloadCoverPdf: (id: string) => downloadFile(`/api/resumes/${id}/cover-pdf`, `cover-letter-${id}.pdf`),
@@ -375,6 +380,9 @@ export interface ResumeContent {
     gpa?: string;
     bullets?: string[];
   }>;
+  achievements?: string[];
+  languages?: string[];
+  hobbies?: string[];
 }
 
 export interface ResumeSkills {
@@ -382,10 +390,16 @@ export interface ResumeSkills {
     | string[]
     | {
         programming_languages?: string[];
-        frameworks?: string[];
+        backend_frameworks?: string[];
+        ai_genai?: string[];
+        streaming_messaging?: string[];
+        databases_storage?: string[];
+        cloud_infra?: string[];
         cloud?: string[];
         databases?: string[];
         tools?: string[];
+        tools_platforms?: string[];
+        languages?: string[];
         other?: string[];
       };
   tools?: string[];
@@ -481,6 +495,14 @@ export interface AtsRefreshResult {
   atsScore: number;
   matchedKeywords: string[];
   missingKeywords: string[];
+  suggestions: Suggestion[];
+}
+
+export interface AiImproveResult {
+  resume_content: ResumeContent;
+  ats_score: number;
+  matched_keywords: string[];
+  missing_keywords: string[];
   suggestions: Suggestion[];
 }
 

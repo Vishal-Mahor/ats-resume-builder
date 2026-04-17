@@ -6,6 +6,13 @@ export interface ResumeContent {
     technical:
       | string[]
       | {
+          languages?: string[];
+          backend_frameworks?: string[];
+          ai_genai?: string[];
+          streaming_messaging?: string[];
+          databases_storage?: string[];
+          cloud_infra?: string[];
+          tools_platforms?: string[];
           programming_languages?: string[];
           frameworks?: string[];
           cloud?: string[];
@@ -27,6 +34,9 @@ export interface ResumeContent {
   }>;
   projects: Array<{ name: string; tech_stack: string; description?: string; summary?: string; bullets?: string[]; url?: string }>;
   education: Array<{ degree: string; institution: string; year: string; gpa?: string; bullets?: string[] }>;
+  achievements?: string[];
+  languages?: string[];
+  hobbies?: string[];
 }
 
 export interface UserMeta {
@@ -88,6 +98,8 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
     )
     .join('');
 
+  const achievementsHtml = (content.achievements || []).map((item) => `<li>${item}</li>`).join('');
+
   const contact = [meta.email, meta.phone, meta.linkedin, meta.github, meta.location]
     .filter(Boolean)
     .join(' | ');
@@ -130,7 +142,7 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
     padding-bottom: 2px;
     margin: 12px 0 5px;
   }
-  .summary { font-size: 10.5pt; line-height: 1.5; }
+  .summary { font-size: 10.5pt; line-height: 1.45; }
   .skills-line { font-size: 10pt; }
   .entry { margin-bottom: 8px; }
   .entry-header {
@@ -151,7 +163,7 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
   <div class="contact">${contact}</div>
 
   <div class="section-title">Summary</div>
-  <p class="summary">${content.summary}</p>
+  <p class="summary">${compactSummaryForPdf(content.summary)}</p>
 
   <div class="section-title">Skills</div>
   ${skillGroups.map((group) => `<p class="skills-line"><strong>${group.label}:</strong> ${group.values.join(' • ')}</p>`).join('')}
@@ -162,8 +174,23 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
   <div class="section-title">Projects</div>
   ${projectsHtml}
 
+  ${achievementsHtml ? `
+  <div class="section-title">Achievements</div>
+  <ul>${achievementsHtml}</ul>
+  ` : ''}
+
   <div class="section-title">Education</div>
   ${educationHtml}
+
+  ${content.languages?.length ? `
+  <div class="section-title">Languages</div>
+  <p class="skills-line">${content.languages.join(', ')}</p>
+  ` : ''}
+
+  ${content.hobbies?.length ? `
+  <div class="section-title">Hobbies</div>
+  <p class="skills-line">${content.hobbies.join(', ')}</p>
+  ` : ''}
 </body>
 </html>`;
 }
@@ -180,14 +207,22 @@ function getSkillGroups(skills: ResumeContent['skills']) {
 
   const technical = skills.technical || {};
   return [
-    { label: 'Programming Languages', values: technical.programming_languages || [] },
-    { label: 'Frameworks', values: technical.frameworks || [] },
-    { label: 'Cloud', values: technical.cloud || [] },
-    { label: 'Databases', values: technical.databases || [] },
-    { label: 'Tools', values: technical.tools || [] },
+    { label: 'Languages', values: technical.languages || technical.programming_languages || [] },
+    { label: 'Backend / Frameworks', values: technical.backend_frameworks || technical.frameworks || [] },
+    { label: 'AI / GenAI', values: technical.ai_genai || [] },
+    { label: 'Streaming / Messaging', values: technical.streaming_messaging || [] },
+    { label: 'Databases / Storage', values: technical.databases_storage || technical.databases || [] },
+    { label: 'Cloud / Infra', values: technical.cloud_infra || technical.cloud || [] },
+    { label: 'Tools / Platforms', values: technical.tools_platforms || technical.tools || [] },
     { label: 'Other Technical', values: technical.other || [] },
     { label: 'Soft Skills', values: skills.soft || [] },
   ].filter((group) => group.values.length > 0);
+}
+
+function compactSummaryForPdf(summary: string) {
+  const words = (summary || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 110) return summary.trim();
+  return `${words.slice(0, 110).join(' ')}...`;
 }
 
 function getProjectBullets(project: ResumeContent['projects'][number]) {

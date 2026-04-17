@@ -47,7 +47,7 @@ export default function JDAnalysisPage() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.9fr)]">
-      <section className="app-panel p-6">
+      <section className="app-panel-strong p-6 sm:p-7">
         {jdLimitReached && (
           <div className="mb-5 rounded-2xl border border-amber-300/35 bg-amber-500/12 px-4 py-3 text-sm text-amber-100">
             Free plan JD analysis limit reached.
@@ -108,7 +108,7 @@ export default function JDAnalysisPage() {
               <span key={keyword} className="app-chip">
                 {keyword}
               </span>
-            )) : <span className="text-sm text-slate-500">No keywords yet.</span>}
+            )) : <span className="text-sm text-[var(--text-secondary)]">No keywords yet.</span>}
           </div>
         </section>
       </aside>
@@ -154,7 +154,7 @@ function Panel({ title, items, tone = 'slate' }: { title: string; items: string[
           <div key={item} className={`rounded-xl px-4 py-3 text-sm leading-7 ${toneClass}`}>
             {item}
           </div>
-        )) : <span className="text-sm text-slate-500">Nothing to show yet.</span>}
+        )) : <span className="text-sm text-[var(--text-secondary)]">Nothing to show yet.</span>}
       </div>
     </section>
   );

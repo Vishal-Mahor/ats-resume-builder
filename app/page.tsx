@@ -61,8 +61,8 @@ export default function HomePage() {
                 <div className="marketing-mini-panel">
                   <div className="marketing-label">ATS alignment</div>
                   <div className="mt-3 text-4xl font-semibold tracking-[-0.05em] text-white">84%</div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full w-[84%] rounded-full bg-[#ff9a3d]" />
+                  <div className="mt-3 h-2 overflow-hidden rounded-[999px] bg-white/10">
+                    <div className="h-full w-[84%] rounded-[999px] bg-[var(--accent)]" />
                   </div>
                 </div>
                 <div className="marketing-mini-panel">
@@ -81,7 +81,7 @@ export default function HomePage() {
                 <div className="marketing-label">Top value</div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   {['Role-specific output', 'Reusable profile', 'Faster iteration'].map((item) => (
-                    <div key={item} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75">
+                    <div key={item} className="rounded-[16px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75">
                       {item}
                     </div>
                   ))}
@@ -164,7 +164,7 @@ export default function HomePage() {
               <div className="mt-6 space-y-3">
                 {plan.features.map((feature) => (
                   <div key={feature} className="marketing-mini-card">
-                    <div className="h-2.5 w-2.5 rounded-full bg-[#ff9a3d]" />
+                    <div className="h-2.5 w-2.5 rounded-full bg-[var(--accent)]" />
                     <p className="text-sm leading-7 text-white/72">{feature}</p>
                   </div>
                 ))}

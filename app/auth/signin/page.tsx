@@ -165,20 +165,20 @@ export default function SignInPage() {
 
   if (checkingAuth) {
     return (
-      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#030711] text-white">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-cyan-300" />
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050b14] text-white">
+        <div className="h-10 w-10 animate-spin rounded-[12px] border-2 border-white/20 border-t-[var(--accent)]" />
       </main>
     );
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#030711] text-white">
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,#040816_0%,#071120_48%,#02040b_100%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(56,189,248,0.18),transparent_22%),radial-gradient(circle_at_82%_18%,rgba(168,85,247,0.18),transparent_24%),radial-gradient(circle_at_48%_78%,rgba(16,185,129,0.12),transparent_26%)]" />
+    <main className="relative min-h-screen overflow-hidden bg-[#050b14] text-white">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(83,129,169,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(83,129,169,0.07)_1px,transparent_1px),linear-gradient(180deg,#060d16_0%,#091524_48%,#050b14_100%)] [background-size:36px_36px,36px_36px,auto]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(34,211,238,0.18),transparent_22%),radial-gradient(circle_at_82%_18%,rgba(99,102,241,0.18),transparent_24%),radial-gradient(circle_at_48%_78%,rgba(45,212,191,0.1),transparent_26%)]" />
       <div className="absolute inset-0 opacity-80 [background-image:radial-gradient(circle_at_8%_18%,rgba(255,255,255,0.9)_0,rgba(255,255,255,0.9)_1px,transparent_1.8px),radial-gradient(circle_at_21%_64%,rgba(255,255,255,0.78)_0,rgba(255,255,255,0.78)_1px,transparent_1.8px),radial-gradient(circle_at_32%_36%,rgba(255,255,255,0.82)_0,rgba(255,255,255,0.82)_1px,transparent_1.8px),radial-gradient(circle_at_44%_16%,rgba(255,255,255,0.72)_0,rgba(255,255,255,0.72)_1px,transparent_1.8px),radial-gradient(circle_at_56%_74%,rgba(255,255,255,0.84)_0,rgba(255,255,255,0.84)_1px,transparent_1.8px),radial-gradient(circle_at_68%_28%,rgba(255,255,255,0.68)_0,rgba(255,255,255,0.68)_1px,transparent_1.8px),radial-gradient(circle_at_78%_58%,rgba(255,255,255,0.88)_0,rgba(255,255,255,0.88)_1px,transparent_1.8px),radial-gradient(circle_at_90%_20%,rgba(255,255,255,0.74)_0,rgba(255,255,255,0.74)_1px,transparent_1.8px)]" />
-      <div className="absolute -left-16 top-10 h-72 w-72 rounded-full bg-sky-500/10 blur-3xl" />
-      <div className="absolute right-[-60px] top-20 h-80 w-80 rounded-full bg-violet-500/12 blur-3xl" />
-      <div className="absolute bottom-[-80px] left-1/3 h-80 w-80 rounded-full bg-emerald-400/10 blur-3xl" />
+      <div className="absolute -left-16 top-10 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" />
+      <div className="absolute right-[-60px] top-20 h-80 w-80 rounded-full bg-indigo-500/12 blur-3xl" />
+      <div className="absolute bottom-[-80px] left-1/3 h-80 w-80 rounded-full bg-teal-400/10 blur-3xl" />
       <div className="absolute left-[12%] top-[16%] h-px w-32 rotate-[18deg] bg-gradient-to-r from-transparent via-white/70 to-transparent opacity-70" />
       <div className="absolute right-[20%] top-[26%] h-px w-20 -rotate-[24deg] bg-gradient-to-r from-transparent via-cyan-200/80 to-transparent opacity-80" />
 
@@ -198,7 +198,7 @@ export default function SignInPage() {
             </div>
 
             <div className="space-y-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-200/75">{modeCopy.eyebrow}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.32em] text-cyan-100/75">{modeCopy.eyebrow}</p>
               <h1
                 className="max-w-3xl text-4xl leading-tight text-white sm:text-5xl lg:text-6xl"
                 style={{ fontFamily: 'Instrument Serif, serif' }}
@@ -216,7 +216,7 @@ export default function SignInPage() {
               ].map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-3xl border border-white/10 bg-white/6 p-4 shadow-[0_22px_60px_rgba(1,4,12,0.42)] backdrop-blur-md"
+                className="rounded-[18px] border border-white/10 bg-white/6 p-4 shadow-[0_22px_60px_rgba(1,4,12,0.42)] backdrop-blur-md"
                 >
                   <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-100/55">
                     {item.label}
@@ -229,7 +229,7 @@ export default function SignInPage() {
         </section>
 
         <section className="flex w-full items-center px-5 pb-10 sm:px-8 lg:max-w-[560px] lg:px-10 lg:pb-0">
-          <div className="w-full rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(8,14,28,0.84),rgba(5,10,20,0.92))] p-5 text-white shadow-[0_30px_90px_rgba(2,6,23,0.56)] backdrop-blur-xl sm:p-8">
+          <div className="w-full rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,14,28,0.84),rgba(5,10,20,0.92))] p-5 text-white shadow-[0_30px_90px_rgba(2,6,23,0.56)] backdrop-blur-xl sm:p-8">
             <div className="mb-8 flex items-center justify-between gap-4">
               <div>
                 <div className="text-[11px] uppercase tracking-[0.28em] text-cyan-200/70">Secure access</div>
@@ -238,7 +238,7 @@ export default function SignInPage() {
                 </h2>
               </div>
 
-              <div className="rounded-full border border-white/10 bg-white/5 p-1 backdrop-blur">
+              <div className="rounded-[14px] border border-white/10 bg-white/5 p-1 backdrop-blur">
                 <button
                   type="button"
                   onClick={() => {
@@ -247,8 +247,8 @@ export default function SignInPage() {
                     setAwaitingOtp(false);
                     setOtpCode('');
                   }}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                    mode === 'signin' ? 'bg-cyan-100 text-slate-950 shadow-sm' : 'text-white/60 hover:text-white'
+                  className={`rounded-[10px] px-3 py-1.5 text-xs font-medium transition ${
+                    mode === 'signin' ? 'bg-[var(--accent)] text-[#06111d] shadow-sm' : 'text-white/60 hover:text-white'
                   }`}
                 >
                   Sign in
@@ -261,8 +261,8 @@ export default function SignInPage() {
                     setAwaitingOtp(false);
                     setOtpCode('');
                   }}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                    mode === 'register' ? 'bg-cyan-100 text-slate-950 shadow-sm' : 'text-white/60 hover:text-white'
+                  className={`rounded-[10px] px-3 py-1.5 text-xs font-medium transition ${
+                    mode === 'register' ? 'bg-[var(--accent)] text-[#06111d] shadow-sm' : 'text-white/60 hover:text-white'
                   }`}
                 >
                   Create account
@@ -277,7 +277,7 @@ export default function SignInPage() {
                     type="button"
                     onClick={() => handleOAuth('google')}
                     disabled={socialLoading !== null}
-                    className="flex items-center justify-center gap-3 rounded-2xl border border-white/12 bg-white/92 px-4 py-3 text-sm font-medium text-slate-900 transition hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    className="flex items-center justify-center gap-3 rounded-[14px] border border-white/12 bg-white/92 px-4 py-3 text-sm font-medium text-slate-900 transition hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <GoogleIcon />
                     {socialLoading === 'google' ? 'Connecting...' : 'Continue with Google'}
@@ -289,7 +289,7 @@ export default function SignInPage() {
                     type="button"
                     onClick={() => handleOAuth('github')}
                     disabled={socialLoading !== null}
-                    className="flex items-center justify-center gap-3 rounded-2xl border border-white/12 bg-white/92 px-4 py-3 text-sm font-medium text-slate-900 transition hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    className="flex items-center justify-center gap-3 rounded-[14px] border border-white/12 bg-white/92 px-4 py-3 text-sm font-medium text-slate-900 transition hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <GitHubIcon />
                     {socialLoading === 'github' ? 'Connecting...' : 'Continue with GitHub'}
@@ -324,7 +324,7 @@ export default function SignInPage() {
                     }
                   }}
                   placeholder="you@company.com"
-                  className={`w-full rounded-2xl border bg-white/95 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] focus:outline-none focus:ring-2 focus:ring-cyan-400/35 ${
+                  className={`w-full rounded-[14px] border bg-white/95 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] focus:outline-none focus:ring-2 focus:ring-cyan-400/35 ${
                     errors.email ? 'border-red-400/75' : 'border-white/18 focus:border-cyan-300'
                   }`}
                 />
@@ -342,7 +342,7 @@ export default function SignInPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword((current) => !current)}
-                    className="text-xs font-medium text-cyan-200 transition hover:text-white"
+                    className="text-xs font-medium text-cyan-100 transition hover:text-white"
                   >
                     {showPassword ? 'Hide password' : 'Show password'}
                   </button>
@@ -359,7 +359,7 @@ export default function SignInPage() {
                     }
                   }}
                   placeholder={mode === 'signin' ? 'Enter your password' : 'Create a strong password'}
-                  className={`w-full rounded-2xl border bg-white/95 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] focus:outline-none focus:ring-2 focus:ring-cyan-400/35 ${
+                  className={`w-full rounded-[14px] border bg-white/95 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] focus:outline-none focus:ring-2 focus:ring-cyan-400/35 ${
                     errors.password ? 'border-red-400/75' : 'border-white/18 focus:border-cyan-300'
                   }`}
                 />
@@ -370,7 +370,7 @@ export default function SignInPage() {
                 <button
                   type="submit"
                   disabled={loading || socialLoading !== null}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(90deg,#8b5cf6,#22d3ee)] px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(90deg,#22d3ee,#6366f1)] px-4 py-3 text-sm font-semibold text-[#06111d] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {loading && <Spinner />}
                   {loading ? (mode === 'signin' ? 'Signing you in...' : 'Sending OTP...') : modeCopy.cta}
@@ -378,7 +378,7 @@ export default function SignInPage() {
               </form>
             ) : (
               <div className="space-y-4">
-                <div className="rounded-2xl border border-cyan-300/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+                <div className="rounded-[14px] border border-cyan-300/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
                   Verify your email to complete signup. We sent a 6-digit OTP to <strong>{email.trim()}</strong>.
                 </div>
                 <div>
@@ -395,7 +395,7 @@ export default function SignInPage() {
                       }
                     }}
                     placeholder="Enter 6-digit code"
-                    className={`w-full rounded-2xl border bg-white/95 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] focus:outline-none focus:ring-2 focus:ring-cyan-400/35 ${
+                    className={`w-full rounded-[14px] border bg-white/95 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] focus:outline-none focus:ring-2 focus:ring-cyan-400/35 ${
                       errors.otp ? 'border-red-400/75' : 'border-white/18 focus:border-cyan-300'
                     }`}
                   />
@@ -405,7 +405,7 @@ export default function SignInPage() {
                   type="button"
                   onClick={handleConfirmOtp}
                   disabled={otpSending}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(90deg,#8b5cf6,#22d3ee)] px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(90deg,#22d3ee,#6366f1)] px-4 py-3 text-sm font-semibold text-[#06111d] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {otpSending && <Spinner />}
                   {otpSending ? 'Verifying OTP...' : 'Verify and create account'}
@@ -417,14 +417,14 @@ export default function SignInPage() {
                     setOtpCode('');
                     setErrors({});
                   }}
-                  className="w-full text-xs font-medium text-cyan-200 transition hover:text-white"
+                  className="w-full text-xs font-medium text-cyan-100 transition hover:text-white"
                 >
                   Back to signup form
                 </button>
               </div>
             )}
 
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <div className="mt-6 rounded-[16px] border border-white/10 bg-white/5 p-4 backdrop-blur">
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200/75">What happens next</div>
               <ul className="mt-3 space-y-2 text-sm leading-6 text-white/70">
                 <li>Build your profile once and reuse it for every application.</li>
@@ -440,7 +440,7 @@ export default function SignInPage() {
 }
 
 function Spinner() {
-  return <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/25 border-t-slate-950" />;
+  return <span className="h-4 w-4 animate-spin rounded-[8px] border-2 border-[#06111d]/25 border-t-[#06111d]" />;
 }
 
 function GoogleIcon() {

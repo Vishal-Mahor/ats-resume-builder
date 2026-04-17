@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,35 +6,40 @@
 
 @layer base {
   :root {
-    --font-sans: 'DM Sans', system-ui, sans-serif;
+    --font-sans: 'Space Grotesk', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
     --font-resume: 'Times New Roman', Times, serif;
 
-    --bg-app: #0a0a0b;
-    --bg-elevated: #101011;
-    --bg-panel: #121213;
-    --bg-panel-strong: #161618;
-    --bg-panel-muted: #171719;
-    --bg-hover: #1b1b1e;
-    --bg-input: #0f0f10;
+    --bg-app: #07101b;
+    --bg-elevated: rgba(8, 15, 26, 0.92);
+    --bg-panel: rgba(9, 19, 33, 0.84);
+    --bg-panel-strong: rgba(10, 24, 42, 0.92);
+    --bg-panel-muted: rgba(11, 22, 38, 0.74);
+    --bg-hover: rgba(43, 214, 255, 0.1);
+    --bg-input: rgba(7, 18, 30, 0.82);
 
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.12);
-    --text-primary: #f4f4f5;
-    --text-secondary: #b1b1b8;
-    --text-muted: #797982;
-    --text-dim: #5f6067;
+    --border-subtle: rgba(87, 200, 255, 0.16);
+    --border-strong: rgba(87, 200, 255, 0.28);
+    --text-primary: #f5fbff;
+    --text-secondary: #9eb6cb;
+    --text-muted: #6d8ca8;
+    --text-dim: #4e677e;
 
-    --accent: #f3a43b;
-    --accent-soft: rgba(243, 164, 59, 0.12);
-    --accent-strong: #ffb85c;
-    --success: #22c55e;
-    --warning: #f59e0b;
-    --danger: #ef4444;
+    --accent: #22d3ee;
+    --accent-soft: rgba(34, 211, 238, 0.12);
+    --accent-strong: #74f5ff;
+    --accent-secondary: #8b5cf6;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #fb7185;
 
-    --shadow-panel: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 20px 40px rgba(0, 0, 0, 0.28);
-    --radius-panel: 22px;
-    --radius-soft: 16px;
+    --shadow-panel:
+      0 0 0 1px rgba(77, 177, 255, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03),
+      0 24px 60px rgba(0, 0, 0, 0.36);
+    --shadow-glow: 0 0 0 1px rgba(34, 211, 238, 0.18), 0 0 40px rgba(34, 211, 238, 0.12);
+    --radius-panel: 18px;
+    --radius-soft: 12px;
   }
 
   * {
@@ -51,6 +56,9 @@
     min-height: 100vh;
     background: var(--bg-app);
     color: var(--text-primary);
+    background-image:
+      radial-gradient(circle at top left, rgba(34, 211, 238, 0.12), transparent 20%),
+      radial-gradient(circle at top right, rgba(139, 92, 246, 0.12), transparent 20%);
   }
 
   input,
@@ -65,9 +73,12 @@
   .marketing-shell {
     @apply min-h-screen overflow-hidden;
     background:
-      radial-gradient(circle at top left, rgba(255, 149, 61, 0.14), transparent 24%),
-      radial-gradient(circle at 88% 12%, rgba(46, 197, 182, 0.12), transparent 20%),
-      linear-gradient(180deg, #07131a 0%, #091821 38%, #051018 100%);
+      linear-gradient(rgba(83, 129, 169, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(83, 129, 169, 0.07) 1px, transparent 1px),
+      radial-gradient(circle at top left, rgba(34, 211, 238, 0.14), transparent 24%),
+      radial-gradient(circle at 88% 12%, rgba(139, 92, 246, 0.12), transparent 20%),
+      linear-gradient(180deg, #060d16 0%, #091524 48%, #050b14 100%);
+    background-size: 40px 40px, 40px 40px, auto, auto, auto;
     color: #f7f8f9;
     position: relative;
   }
@@ -82,7 +93,7 @@
     top: 7rem;
     height: 18rem;
     width: 18rem;
-    background: rgba(255, 154, 61, 0.18);
+    background: rgba(34, 211, 238, 0.18);
   }
 
   .marketing-orb-right {
@@ -90,45 +101,49 @@
     top: 10rem;
     height: 22rem;
     width: 22rem;
-    background: rgba(54, 208, 187, 0.14);
+    background: rgba(139, 92, 246, 0.16);
   }
 
   .marketing-logo-mark {
-    @apply flex h-11 w-11 items-center justify-center rounded-2xl text-lg font-semibold;
-    background: linear-gradient(135deg, #ffb059 0%, #ff7d3f 100%);
-    color: #091018;
-    box-shadow: 0 18px 40px rgba(255, 138, 61, 0.24);
+    @apply flex h-11 w-11 items-center justify-center text-lg font-semibold;
+    border-radius: calc(var(--radius-soft) + 2px);
+    background: linear-gradient(135deg, #22d3ee 0%, #6366f1 100%);
+    color: #07111c;
+    box-shadow: 0 18px 40px rgba(34, 211, 238, 0.24);
   }
 
   .marketing-button-primary {
-    @apply inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition;
-    background: linear-gradient(135deg, #ffb45f 0%, #ff8844 100%);
-    color: #101418;
-    box-shadow: 0 18px 36px rgba(255, 138, 61, 0.24);
+    @apply inline-flex items-center justify-center px-5 py-3 text-sm font-semibold transition;
+    border-radius: var(--radius-soft);
+    background: linear-gradient(135deg, #22d3ee 0%, #6366f1 100%);
+    color: #08111a;
+    box-shadow: 0 18px 36px rgba(34, 211, 238, 0.24);
   }
 
   .marketing-button-primary:hover {
     transform: translateY(-1px);
-    box-shadow: 0 22px 44px rgba(255, 138, 61, 0.3);
+    box-shadow: 0 22px 44px rgba(34, 211, 238, 0.3);
   }
 
   .marketing-button-form {
-    @apply inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition;
+    @apply inline-flex items-center justify-center px-5 py-3 text-sm font-semibold transition;
+    border-radius: var(--radius-soft);
     min-width: 10.5rem;
-    background: linear-gradient(180deg, rgba(255, 180, 95, 0.16), rgba(255, 138, 68, 0.16));
-    border: 1px solid rgba(255, 180, 95, 0.28);
-    color: #ffd9ae;
+    background: linear-gradient(180deg, rgba(34, 211, 238, 0.16), rgba(99, 102, 241, 0.16));
+    border: 1px solid rgba(34, 211, 238, 0.28);
+    color: #ccfbff;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   .marketing-button-form:hover {
-    background: linear-gradient(180deg, rgba(255, 180, 95, 0.22), rgba(255, 138, 68, 0.22));
-    border-color: rgba(255, 180, 95, 0.4);
-    color: #fff1df;
+    background: linear-gradient(180deg, rgba(34, 211, 238, 0.22), rgba(99, 102, 241, 0.22));
+    border-color: rgba(34, 211, 238, 0.4);
+    color: #effeff;
   }
 
   .marketing-button-ghost {
-    @apply inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-medium transition;
+    @apply inline-flex items-center justify-center px-5 py-3 text-sm font-medium transition;
+    border-radius: var(--radius-soft);
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.12);
     color: rgba(255, 255, 255, 0.84);
@@ -141,15 +156,16 @@
   }
 
   .marketing-pill {
-    @apply inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em];
-    background: rgba(255, 180, 95, 0.14);
-    border: 1px solid rgba(255, 180, 95, 0.2);
-    color: #ffd39d;
+    @apply inline-flex items-center px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em];
+    border-radius: var(--radius-soft);
+    background: rgba(34, 211, 238, 0.14);
+    border: 1px solid rgba(34, 211, 238, 0.2);
+    color: #aef8ff;
   }
 
   .marketing-eyebrow {
     @apply text-[11px] font-semibold uppercase tracking-[0.28em];
-    color: #ffcb94;
+    color: #9cecff;
   }
 
   .marketing-hero-card,
@@ -166,11 +182,13 @@
   }
 
   .marketing-hero-card {
-    @apply rounded-[34px] p-7 sm:p-9 lg:p-10;
+    @apply p-7 sm:p-9 lg:p-10;
+    border-radius: calc(var(--radius-panel) + 4px);
   }
 
   .marketing-dashboard-card {
-    @apply rounded-[30px] p-5 sm:p-6;
+    @apply p-5 sm:p-6;
+    border-radius: calc(var(--radius-panel) + 2px);
   }
 
   .marketing-window-topbar {
@@ -184,13 +202,15 @@
 
   .marketing-mini-panel,
   .marketing-mini-card {
-    @apply flex gap-4 rounded-[24px] border p-4;
+    @apply flex gap-4 border p-4;
+    border-radius: var(--radius-panel);
     border-color: rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.035);
   }
 
   .marketing-stat-card {
-    @apply rounded-[24px] border p-4;
+    @apply border p-4;
+    border-radius: var(--radius-panel);
     border-color: rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.035);
   }
@@ -225,7 +245,8 @@
   .marketing-feature-card,
   .marketing-pricing-card,
   .marketing-section-card {
-    @apply rounded-[30px] p-6 sm:p-7;
+    @apply p-6 sm:p-7;
+    border-radius: calc(var(--radius-panel) + 2px);
   }
 
   .marketing-pricing-featured {
@@ -235,21 +256,24 @@
   }
 
   .marketing-icon-chip {
-    @apply inline-flex h-11 w-11 items-center justify-center rounded-2xl;
-    background: rgba(255, 177, 96, 0.12);
-    color: #ffbf7d;
-    border: 1px solid rgba(255, 177, 96, 0.16);
+    @apply inline-flex h-11 w-11 items-center justify-center;
+    border-radius: calc(var(--radius-soft) + 2px);
+    background: rgba(34, 211, 238, 0.12);
+    color: #97f7ff;
+    border: 1px solid rgba(34, 211, 238, 0.16);
   }
 
   .marketing-step-pill {
-    @apply inline-flex shrink-0 items-center justify-center rounded-full px-3 py-1 text-xs font-semibold;
-    background: rgba(54, 208, 187, 0.14);
-    color: #9dece0;
+    @apply inline-flex shrink-0 items-center justify-center px-3 py-1 text-xs font-semibold;
+    border-radius: var(--radius-soft);
+    background: rgba(99, 102, 241, 0.14);
+    color: #c7cbff;
     letter-spacing: 0.16em;
   }
 
   .marketing-workflow-row {
-    @apply rounded-[26px] px-5 py-5;
+    @apply px-5 py-5;
+    border-radius: calc(var(--radius-panel) + 1px);
   }
 
   .marketing-contact-form {
@@ -257,7 +281,8 @@
   }
 
   .marketing-input {
-    @apply w-full rounded-[20px] border px-4 py-3.5 text-sm transition focus:outline-none;
+    @apply w-full border px-4 py-3.5 text-sm transition focus:outline-none;
+    border-radius: var(--radius-soft);
     border-color: rgba(255, 255, 255, 0.1);
     background: rgba(255, 255, 255, 0.04);
     color: #fff;
@@ -273,49 +298,60 @@
   }
 
   .marketing-callout {
-    @apply flex flex-col gap-6 rounded-[34px] p-7 sm:p-8 lg:flex-row lg:items-end lg:justify-between;
+    @apply flex flex-col gap-6 p-7 sm:p-8 lg:flex-row lg:items-end lg:justify-between;
+    border-radius: calc(var(--radius-panel) + 4px);
   }
 
   .marketing-footer {
-    @apply flex flex-col gap-6 rounded-[28px] p-6 sm:p-7 lg:flex-row lg:items-end lg:justify-between;
+    @apply flex flex-col gap-6 p-6 sm:p-7 lg:flex-row lg:items-end lg:justify-between;
+    border-radius: calc(var(--radius-panel) + 2px);
   }
 
   .app-shell {
     @apply min-h-screen;
     background:
-      radial-gradient(circle at top left, rgba(255, 255, 255, 0.025), transparent 20%),
-      radial-gradient(circle at top right, rgba(243, 164, 59, 0.06), transparent 18%),
-      var(--bg-app);
+      linear-gradient(rgba(83, 129, 169, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(83, 129, 169, 0.07) 1px, transparent 1px),
+      radial-gradient(circle at top left, rgba(34, 211, 238, 0.12), transparent 22%),
+      radial-gradient(circle at 82% 14%, rgba(139, 92, 246, 0.12), transparent 18%),
+      linear-gradient(180deg, #060d16 0%, #091524 54%, #050b14 100%);
+    background-size: 40px 40px, 40px 40px, auto, auto, auto;
     color: var(--text-primary);
   }
 
   .app-panel {
-    @apply rounded-[22px] border;
+    @apply border;
+    border-radius: var(--radius-panel);
     background: var(--bg-panel);
     border-color: var(--border-subtle);
     box-shadow: var(--shadow-panel);
   }
 
   .app-panel-muted {
-    @apply rounded-[18px] border;
+    @apply border;
+    border-radius: var(--radius-soft);
     background: var(--bg-panel-muted);
     border-color: var(--border-subtle);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
   }
 
   .app-panel-strong {
-    @apply rounded-[22px] border;
-    background: var(--bg-panel-strong);
+    @apply border;
+    border-radius: var(--radius-panel);
+    background:
+      linear-gradient(180deg, rgba(14, 33, 55, 0.94), rgba(10, 22, 39, 0.92)),
+      var(--bg-panel-strong);
     border-color: var(--border-strong);
-    box-shadow: var(--shadow-panel);
+    box-shadow: var(--shadow-panel), inset 0 0 0 1px rgba(34, 211, 238, 0.06);
   }
 
   .app-heading {
-    @apply text-[30px] font-semibold tracking-[-0.03em];
+    @apply text-[30px] font-bold tracking-[-0.05em];
     color: var(--text-primary);
   }
 
   .app-subheading {
-    @apply text-xl font-semibold tracking-[-0.02em];
+    @apply text-xl font-bold tracking-[-0.03em];
     color: var(--text-primary);
   }
 
@@ -335,48 +371,58 @@
   }
 
   .app-button-primary {
-    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition;
-    background: #1d1d20;
-    color: var(--text-primary);
-    border: 1px solid var(--border-strong);
+    @apply inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold transition;
+    border-radius: var(--radius-soft);
+    background: linear-gradient(135deg, rgba(31, 214, 255, 0.22), rgba(90, 121, 255, 0.18));
+    color: #eefcff;
+    border: 1px solid rgba(79, 216, 255, 0.34);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 28px rgba(20, 127, 255, 0.14);
   }
 
   .app-button-primary:hover {
-    background: #242427;
+    background: linear-gradient(135deg, rgba(31, 214, 255, 0.3), rgba(90, 121, 255, 0.24));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 16px 34px rgba(20, 127, 255, 0.18);
   }
 
   .app-button-secondary {
-    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium transition;
-    background: transparent;
-    color: var(--text-secondary);
+    @apply inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium transition;
+    border-radius: var(--radius-soft);
+    background: rgba(255, 255, 255, 0.02);
+    color: #d5e8f6;
     border: 1px solid var(--border-subtle);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .app-button-secondary:hover {
     color: var(--text-primary);
     background: var(--bg-hover);
+    border-color: rgba(78, 210, 255, 0.26);
   }
 
   .app-badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em];
+    @apply inline-flex items-center px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em];
+    border-radius: calc(var(--radius-soft) - 2px);
     background: var(--accent-soft);
     color: var(--accent-strong);
   }
 
   .app-chip {
-    @apply inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium;
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-secondary);
+    @apply inline-flex items-center px-3 py-1.5 text-xs font-medium;
+    border-radius: var(--radius-soft);
+    background: rgba(34, 211, 238, 0.08);
+    color: #d9fbff;
     border: 1px solid var(--border-subtle);
   }
 
   .app-stat-value {
-    @apply text-[34px] font-semibold tracking-[-0.03em];
+    @apply text-[34px] font-bold tracking-[-0.05em];
     color: var(--text-primary);
+    text-shadow: 0 0 18px rgba(34, 211, 238, 0.08);
   }
 
   .input-shell {
-    @apply w-full rounded-xl border px-4 py-3 text-sm transition placeholder:text-sm focus:outline-none;
+    @apply w-full border px-4 py-3 text-sm transition placeholder:text-sm focus:outline-none;
+    border-radius: var(--radius-soft);
     background: var(--bg-input);
     border-color: var(--border-subtle);
     color: var(--text-primary);
@@ -387,8 +433,8 @@
   }
 
   .input-shell:focus {
-    border-color: rgba(243, 164, 59, 0.55);
-    box-shadow: 0 0 0 4px rgba(243, 164, 59, 0.08);
+    border-color: rgba(34, 211, 238, 0.46);
+    box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.1);
   }
 
   .app-table-row {
@@ -401,18 +447,18 @@
   }
 
   .app-score-high {
-    background: rgba(34, 197, 94, 0.12);
-    color: #7ee787;
+    background: rgba(74, 222, 128, 0.12);
+    color: #9ff3bb;
   }
 
   .app-score-medium {
-    background: rgba(245, 158, 11, 0.12);
-    color: #f6c36b;
+    background: rgba(251, 191, 36, 0.12);
+    color: #ffd979;
   }
 
   .app-score-low {
-    background: rgba(239, 68, 68, 0.12);
-    color: #f68e8e;
+    background: rgba(251, 113, 133, 0.12);
+    color: #ff9fb0;
   }
 
   .resume-paper {
@@ -434,7 +480,8 @@
   }
 
   .skill-tag {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium;
+    border-radius: calc(var(--radius-soft) - 2px);
     background: rgba(243, 164, 59, 0.12);
     color: var(--accent-strong);
   }
@@ -462,7 +509,8 @@
   }
 
   .resume-generation-dialog {
-    @apply relative z-[1] flex max-h-[calc(100vh-2rem)] w-full max-w-[1380px] flex-col overflow-hidden rounded-[30px] border;
+    @apply relative z-[1] flex max-h-[calc(100vh-2rem)] w-full max-w-[1380px] flex-col overflow-hidden border;
+    border-radius: calc(var(--radius-panel) + 6px);
     background: linear-gradient(180deg, rgba(16, 16, 17, 0.98), rgba(12, 12, 13, 0.98));
     border-color: rgba(255, 255, 255, 0.1);
     box-shadow: 0 32px 120px rgba(0, 0, 0, 0.55);
@@ -497,7 +545,8 @@
   }
 
   .resume-generation-step {
-    @apply h-1.5 w-16 overflow-hidden rounded-full;
+    @apply h-1.5 w-16 overflow-hidden;
+    border-radius: 999px;
     background: rgba(255, 255, 255, 0.08);
     position: relative;
   }

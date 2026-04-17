@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/server/db';
-import { callOpenAI } from '@/lib/server/ai';
 import { requireAuthUserId } from '@/lib/server/auth-token';
 import { handleRouteError, HttpError } from '@/lib/server/http';
 import { getFullProfile } from '@/lib/server/profile-service';
@@ -9,12 +8,7 @@ import { getUserSettings } from '@/lib/server/settings-service';
 import { getResumeTemplateById } from '@/lib/server/template-service';
 import { createNotificationForUser } from '@/lib/server/notification-service';
 import { assertCanUse, consumeUsage } from '@/lib/server/billing-service';
-import {
-  COVER_LETTER_PROMPT,
-  JD_ANALYSIS_PROMPT,
-  MATCH_PROFILE_PROMPT,
-  RESUME_GENERATION_PROMPT,
-} from '@/lib/server/prompts';
+import { generateTailoredResumePackage } from '@/lib/server/tailoring-pipeline';
 
 export const runtime = 'nodejs';
 
@@ -65,31 +59,13 @@ export async function POST(request: Request) {
           education: [],
         };
 
-    const jdAnalysis = JSON.parse(await callOpenAI(JD_ANALYSIS_PROMPT(body.job_description)));
-    const matchResult = JSON.parse(await callOpenAI(MATCH_PROFILE_PROMPT(effectiveProfile, jdAnalysis)));
-    const resumeContent = JSON.parse(
-      await callOpenAI(
-        RESUME_GENERATION_PROMPT(
-          effectiveProfile,
-          jdAnalysis,
-          matchResult,
-          body.company_name,
-          body.job_title
-        )
-      )
-    );
-
-    const coverLetter = await callOpenAI(
-      COVER_LETTER_PROMPT(
-        effectiveProfile,
-        jdAnalysis,
-        resumeContent,
-        body.company_name,
-        body.job_title,
-        body.cover_letter_tone
-      ),
-      false
-    );
+    const tailored = await generateTailoredResumePackage({
+      companyName: body.company_name,
+      jobTitle: body.job_title,
+      coverLetterTone: body.cover_letter_tone,
+      jobDescription: body.job_description,
+      candidateProfile: effectiveProfile,
+    });
 
     if (!userSettings.privacy.keepResumeHistory) {
       await db.query('DELETE FROM resumes WHERE user_id=$1', [userId]);
@@ -109,13 +85,13 @@ export async function POST(request: Request) {
         body.company_name,
         body.job_title,
         body.source_platform,
-        JSON.stringify(resumeContent),
-        coverLetter,
+        JSON.stringify(tailored.resumeContent),
+        tailored.coverLetter,
         body.cover_letter_tone,
-        matchResult.ats_score,
-        JSON.stringify(matchResult.matched_keywords),
-        JSON.stringify(matchResult.missing_keywords),
-        JSON.stringify(matchResult.suggestions),
+        tailored.atsReport.overallScore,
+        JSON.stringify(tailored.atsReport.matchedKeywords),
+        JSON.stringify(tailored.atsReport.missingKeywords),
+        JSON.stringify(tailored.atsReport.suggestions),
       ]
     );
     await consumeUsage(userId, 'resume');
@@ -129,13 +105,13 @@ export async function POST(request: Request) {
         metadata: { resumeId: resume.id, company: body.company_name, role: body.job_title },
       });
 
-      if ((matchResult.missing_keywords ?? []).length > 0) {
+      if ((tailored.atsReport.missingKeywords ?? []).length > 0) {
         await createNotificationForUser({
           userId,
           type: 'ats-alert',
           title: 'ATS keyword gaps found',
-          message: `Found ${matchResult.missing_keywords.length} missing keywords for ${body.company_name}.`,
-          metadata: { resumeId: resume.id, missingKeywords: matchResult.missing_keywords.slice(0, 8) },
+          message: `Found ${tailored.atsReport.missingKeywords.length} missing keywords for ${body.company_name}.`,
+          metadata: { resumeId: resume.id, missingKeywords: tailored.atsReport.missingKeywords.slice(0, 8) },
         });
       }
 
@@ -155,13 +131,13 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         resume_id: resume.id,
-        resume_content: resumeContent,
-        cover_letter: coverLetter,
+        resume_content: tailored.resumeContent,
+        cover_letter: tailored.coverLetter,
         source_platform: body.source_platform,
-        ats_score: matchResult.ats_score,
-        matched_keywords: matchResult.matched_keywords,
-        missing_keywords: matchResult.missing_keywords,
-        suggestions: matchResult.suggestions,
+        ats_score: tailored.atsReport.overallScore,
+        matched_keywords: tailored.atsReport.matchedKeywords,
+        missing_keywords: tailored.atsReport.missingKeywords,
+        suggestions: tailored.atsReport.suggestions,
         created_at: resume.created_at,
       },
       { status: 201 }
