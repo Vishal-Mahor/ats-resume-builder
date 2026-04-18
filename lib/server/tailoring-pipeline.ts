@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { FullProfile, ResumeContent, ResumeSkills, Suggestion } from '@/lib/api';
+import type { FullProfile, ResumeAnalysisSnapshot, ResumeContent, ResumeSettings, ResumeSkills, Suggestion } from '@/lib/api';
 import { addSkillToResumeSkills, normalizeResumeSkills } from '@/lib/skill-taxonomy';
 import { callOpenAI } from '@/lib/server/ai';
 import {
@@ -118,6 +118,10 @@ export const finalAssemblySchema = z.object({
   section_priority: z.array(z.string()).default(['summary', 'skills', 'experience', 'projects', 'education']),
 });
 
+const aiImproveResponseSchema = z.object({
+  resume_content: z.any(),
+});
+
 type JDParse = {
   title: string;
   seniority: 'junior' | 'mid' | 'senior' | 'staff' | 'lead' | 'manager' | 'unknown';
@@ -150,14 +154,16 @@ type AtsEvaluation = z.infer<typeof atsEvaluationSchema>;
 export async function analyzeCandidateAgainstJD(input: {
   jobDescription: string;
   candidateProfile: FullProfile;
+  resumeSettings?: ResumeSettings;
 }) {
   const candidateSnapshot = buildCandidateSnapshot(input.candidateProfile);
-  const jdParse = normalizeJdParse(await runJsonPrompt(JD_PARSING_PROMPT(input.jobDescription), jdParseSchema));
+  const prompts = input.resumeSettings?.prompts;
+  const jdParse = normalizeJdParse(await runJsonPrompt(JD_PARSING_PROMPT(input.jobDescription, prompts?.jdParsing), jdParseSchema));
   const candidateEvidence = normalizeCandidateEvidence(
-    await runJsonPrompt(CANDIDATE_EVIDENCE_PROMPT(candidateSnapshot), candidateEvidenceSchema)
+    await runJsonPrompt(CANDIDATE_EVIDENCE_PROMPT(candidateSnapshot, prompts?.candidateEvidence), candidateEvidenceSchema)
   );
   const mappings = normalizeRelevanceMappings(
-    await runJsonPrompt(RELEVANCE_MAPPING_PROMPT(jdParse, candidateEvidence), relevanceMappingSchema)
+    await runJsonPrompt(RELEVANCE_MAPPING_PROMPT(jdParse, candidateEvidence, prompts?.relevanceMapping), relevanceMappingSchema)
   );
   const deterministic = computeDeterministicMatch(jdParse, candidateEvidence, mappings);
 
@@ -176,11 +182,14 @@ export async function generateTailoredResumePackage(input: {
   coverLetterTone: 'formal' | 'modern' | 'aggressive';
   jobDescription: string;
   candidateProfile: FullProfile;
+  resumeSettings?: ResumeSettings;
 }) {
   const analysis = await analyzeCandidateAgainstJD({
     jobDescription: input.jobDescription,
     candidateProfile: input.candidateProfile,
+    resumeSettings: input.resumeSettings,
   });
+  const prompts = input.resumeSettings?.prompts;
 
   const rewrites = normalizeBulletRewrites(await runJsonPrompt(
     BULLET_REWRITE_PROMPT({
@@ -189,7 +198,7 @@ export async function generateTailoredResumePackage(input: {
       jdParse: analysis.jdParse,
       mappings: analysis.mappings,
       candidateSnapshot: analysis.candidateSnapshot,
-    }),
+    }, prompts?.experienceRewrite),
     bulletRewriteSchema
   ).catch(() => ({ experience_rewrites: [], project_rewrites: [] })));
 
@@ -200,9 +209,9 @@ export async function generateTailoredResumePackage(input: {
       jdParse: analysis.jdParse,
       mappings: analysis.mappings,
       candidateEvidence: analysis.candidateEvidence,
-    }),
+    }, prompts?.summaryGeneration),
     summaryGenerationSchema
-  ).catch(() => buildFallbackSummary(input.candidateProfile, input.jobTitle, analysis.jdParse, analysis.deterministic.matchedKeywords)));
+  ).catch(() => buildFallbackSummary(input.candidateProfile, input.jobTitle, analysis.jdParse, analysis.deterministic.matchedKeywords, input.resumeSettings)));
 
   validateSupportIds(summary.supporting_evidence_ids, analysis.candidateEvidence);
 
@@ -213,14 +222,16 @@ export async function generateTailoredResumePackage(input: {
     mappings: analysis.mappings,
     rewrites,
     summary,
+    resumeSettings: input.resumeSettings,
   });
   const resumeContent = finalizeResumeContent(draftedResumeContent, {
     candidateProfile: input.candidateProfile,
     jdParse: analysis.jdParse,
     candidateEvidence: analysis.candidateEvidence,
     mappings: analysis.mappings,
+    resumeSettings: input.resumeSettings,
   });
-  validateFinalResumeContent(resumeContent, analysis.candidateEvidence);
+  validateFinalResumeContent(resumeContent, analysis.candidateEvidence, input.resumeSettings);
 
   const aiAtsEvaluation = normalizeAtsEvaluation(await runJsonPrompt(
     ATS_EVALUATION_PROMPT({
@@ -228,7 +239,7 @@ export async function generateTailoredResumePackage(input: {
       candidateEvidence: analysis.candidateEvidence,
       mappings: analysis.mappings,
       finalResume: resumeContent,
-    }),
+    }, prompts?.atsEvaluation),
     atsEvaluationSchema
   ).catch(() => ({
     matched_requirements: [],
@@ -249,7 +260,7 @@ export async function generateTailoredResumePackage(input: {
       skills: resumeContent.skills,
       rewrittenSections: rewrites,
       candidateSnapshot: analysis.candidateSnapshot,
-    }),
+    }, prompts?.finalAssembly),
     finalAssemblySchema
   ).catch(() => ({
     ordering_notes: [],
@@ -273,7 +284,7 @@ export async function generateTailoredResumePackage(input: {
       mappings: analysis.mappings,
       finalResume: resumeContent,
       candidateEvidence: analysis.candidateEvidence,
-    }),
+    }, prompts?.coverLetter),
     false
   );
 
@@ -285,6 +296,88 @@ export async function generateTailoredResumePackage(input: {
     resumeContent,
     coverLetter,
     atsReport,
+  };
+}
+
+export async function improveResumeWithContext(input: {
+  companyName: string;
+  jobTitle: string;
+  currentResumeContent: ResumeContent;
+  focusText?: string;
+  candidateProfile: FullProfile;
+  resumeSettings?: ResumeSettings;
+  analysisSnapshot?: ResumeAnalysisSnapshot | null;
+  matchedKeywords: string[];
+  missingKeywords: string[];
+  suggestions: Suggestion[];
+}) {
+  const prompts = input.resumeSettings?.prompts;
+  const analysis =
+    input.analysisSnapshot?.jdParse && input.analysisSnapshot?.candidateEvidence && input.analysisSnapshot?.mappings
+      ? {
+          jdParse: normalizeJdParse(input.analysisSnapshot.jdParse),
+          candidateSnapshot: (input.analysisSnapshot.candidateSnapshot as Record<string, unknown>) ?? buildCandidateSnapshot(input.candidateProfile),
+          candidateEvidence: normalizeCandidateEvidence(input.analysisSnapshot.candidateEvidence),
+          mappings: normalizeRelevanceMappings(input.analysisSnapshot.mappings),
+          deterministic: computeDeterministicMatch(
+            normalizeJdParse(input.analysisSnapshot.jdParse),
+            normalizeCandidateEvidence(input.analysisSnapshot.candidateEvidence),
+            normalizeRelevanceMappings(input.analysisSnapshot.mappings)
+          ),
+        }
+      : await analyzeCandidateAgainstJD({
+          jobDescription: buildSyntheticJobDescription(input.jobTitle, input.matchedKeywords, input.missingKeywords, input.suggestions),
+          candidateProfile: input.candidateProfile,
+          resumeSettings: input.resumeSettings,
+        });
+
+  const prompt = buildAiImprovePrompt({
+    companyName: input.companyName,
+    jobTitle: input.jobTitle,
+    currentResumeContent: input.currentResumeContent,
+    matchedKeywords: input.matchedKeywords,
+    missingKeywords: input.missingKeywords,
+    suggestions: input.suggestions,
+    focusText: input.focusText,
+    candidateProfile: input.candidateProfile,
+    jdParse: analysis.jdParse,
+    candidateEvidence: analysis.candidateEvidence,
+    mappings: analysis.mappings,
+    promptTemplates: {
+      experienceRewrite: prompts?.experienceRewrite,
+      summaryGeneration: prompts?.summaryGeneration,
+      atsEvaluation: prompts?.atsEvaluation,
+      finalAssembly: prompts?.finalAssembly,
+    },
+  });
+
+  const raw = await callOpenAI(prompt);
+  const parsed = aiImproveResponseSchema.parse(JSON.parse(raw));
+  const finalized = finalizeResumeContent(parsed.resume_content as ResumeContent, {
+    candidateProfile: input.candidateProfile,
+    jdParse: analysis.jdParse,
+    candidateEvidence: analysis.candidateEvidence,
+    mappings: analysis.mappings,
+    resumeSettings: input.resumeSettings,
+  });
+  validateFinalResumeContent(finalized, analysis.candidateEvidence, input.resumeSettings);
+
+  const atsReport = scoreTailoredResume({
+    resumeContent: finalized,
+    jdParse: analysis.jdParse,
+    candidateEvidence: analysis.candidateEvidence,
+    mappings: analysis.mappings,
+  });
+
+  return {
+    resumeContent: finalized,
+    atsReport,
+    analysisSnapshot: {
+      jdParse: analysis.jdParse,
+      candidateSnapshot: analysis.candidateSnapshot,
+      candidateEvidence: analysis.candidateEvidence,
+      mappings: analysis.mappings,
+    } satisfies ResumeAnalysisSnapshot,
   };
 }
 
@@ -495,14 +588,21 @@ function buildFallbackSummary(
   profile: FullProfile,
   jobTitle: string,
   jdParse: JDParse,
-  matchedKeywords: string[]
+  matchedKeywords: string[],
+  resumeSettings?: ResumeSettings
 ): SummaryGeneration {
   const topKeywords = matchedKeywords.slice(0, 4).join(', ');
   const years = jdParse.minimum_years_experience > 0 ? `${jdParse.minimum_years_experience}+ years targeted` : 'relevant experience';
+  const summaryMaxWords = getSummaryWordLimit(resumeSettings);
   return {
-    summary: profile.summary?.trim()
+    summary: compactSummary(
+      profile.summary?.trim()
       ? profile.summary.trim()
       : `${jobTitle} candidate with ${years} across ${jdParse.domain.slice(0, 2).join(', ') || 'software delivery'}, with evidence-backed experience in ${topKeywords || 'core engineering work'}.`,
+      jdParse,
+      profile.summary || '',
+      summaryMaxWords
+    ),
     supporting_evidence_ids: [],
     included_keywords: matchedKeywords.slice(0, 6),
     excluded_keywords_due_to_no_evidence: [],
@@ -616,7 +716,12 @@ function assembleResumeContent(input: {
   mappings: RelevanceMapping;
   rewrites: BulletRewrite;
   summary: SummaryGeneration;
+  resumeSettings?: ResumeSettings;
 }): ResumeContent {
+  const maxBullets = getMaxBulletsPerSection(input.resumeSettings);
+  const defaultSectionVisibility = getDefaultSectionVisibility(input.resumeSettings);
+  const maxProjects = input.resumeSettings?.structure.maxProjects ?? 4;
+  const maxEducationItems = input.resumeSettings?.structure.maxEducationItems ?? 3;
   const experienceRewrites = new Map(input.rewrites.experience_rewrites.map((item) => [item.source_record_id, item]));
   const projectRewrites = new Map(input.rewrites.project_rewrites.map((item) => [item.source_record_id, item]));
 
@@ -641,11 +746,12 @@ function assembleResumeContent(input: {
       const rewriteBullets = projectRewrites.get(project.__recordId)?.rewritten_bullets || [];
       return rewriteBullets.length > 0 || Boolean(project.description?.trim());
     })
-    .slice(0, 4);
+    .slice(0, maxProjects);
 
   const resumeContent: ResumeContent = {
-    summary: compactSummary(input.summary.summary, input.jdParse, input.candidateProfile.summary || ''),
+    summary: compactSummary(input.summary.summary, input.jdParse, input.candidateProfile.summary || '', getSummaryWordLimit(input.resumeSettings)),
     skills: buildResumeSkills(input),
+    section_visibility: defaultSectionVisibility,
     experience: prioritizedExperience.map((experience) => ({
       job_title: experience.job_title,
       company: experience.company,
@@ -656,7 +762,7 @@ function assembleResumeContent(input: {
       bullets: selectGroundedBullets(
         experienceRewrites.get(experience.__recordId)?.rewritten_bullets,
         experience.bullets || [],
-        7
+        maxBullets
       ),
     })),
     projects: selectedProjects.map((project) => ({
@@ -666,11 +772,11 @@ function assembleResumeContent(input: {
       bullets: selectGroundedBullets(
         projectRewrites.get(project.__recordId)?.rewritten_bullets,
         project.description ? [project.description] : [],
-        4
+        maxBullets
       ),
       url: project.url || undefined,
     })),
-    education: (input.candidateProfile.education || []).map((education) => ({
+    education: (input.candidateProfile.education || []).slice(0, maxEducationItems).map((education) => ({
       degree: education.degree,
       institution: education.institution,
       year: education.year,
@@ -678,17 +784,17 @@ function assembleResumeContent(input: {
     })),
   };
 
-  const achievements = uniqueCaseInsensitive((input.candidateProfile.achievements || []).map((item) => item.trim()).filter(Boolean)).slice(0, 5);
+  const achievements = uniqueCaseInsensitive((input.candidateProfile.achievements || []).map((item) => item.trim()).filter(Boolean)).slice(0, maxBullets);
   if (achievements.length > 0) {
     resumeContent.achievements = achievements;
   }
 
-  const languages = uniqueCaseInsensitive((input.candidateProfile.languages || []).map((item) => item.trim()).filter(Boolean)).slice(0, 8);
+  const languages = uniqueCaseInsensitive((input.candidateProfile.languages || []).map((item) => item.trim()).filter(Boolean)).slice(0, maxBullets);
   if (languages.length > 0) {
     resumeContent.languages = languages;
   }
 
-  const hobbies = uniqueCaseInsensitive((input.candidateProfile.hobbies || []).map((item) => item.trim()).filter(Boolean)).slice(0, 6);
+  const hobbies = uniqueCaseInsensitive((input.candidateProfile.hobbies || []).map((item) => item.trim()).filter(Boolean)).slice(0, maxBullets);
   if (hobbies.length > 0) {
     resumeContent.hobbies = hobbies;
   }
@@ -898,21 +1004,25 @@ function finalizeResumeContent(
     jdParse: JDParse;
     candidateEvidence: CandidateEvidence;
     mappings: RelevanceMapping;
+    resumeSettings?: ResumeSettings;
   }
 ) {
-  const summary = compactSummary(content.summary, context.jdParse, context.candidateProfile.summary || '');
-  const experience = content.experience.map((entry, index) => ({
+  const maxBullets = getMaxBulletsPerSection(context.resumeSettings);
+  const maxProjects = context.resumeSettings?.structure.maxProjects ?? 4;
+  const maxEducationItems = context.resumeSettings?.structure.maxEducationItems ?? 3;
+  const summary = compactSummary(content.summary, context.jdParse, context.candidateProfile.summary || '', getSummaryWordLimit(context.resumeSettings));
+  const experience = content.experience.map((entry) => ({
     ...entry,
-    bullets: enforceBulletQuality(entry.bullets, index <= 1 ? 7 : 5),
+    bullets: enforceBulletQuality(entry.bullets, maxBullets),
   }));
   const projects = (content.projects || [])
     .filter((project) => Boolean(project.name?.trim()) && ((project.bullets?.length || 0) > 0 || Boolean(project.summary || project.description)))
-    .slice(0, 4)
+    .slice(0, maxProjects)
     .map((project) => ({
       ...project,
-      bullets: enforceBulletQuality(project.bullets || [project.summary || project.description || ''], 4),
+      bullets: enforceBulletQuality(project.bullets || [project.summary || project.description || ''], maxBullets),
     }));
-  const education = (content.education || []).map((entry) => ({
+  const education = (content.education || []).slice(0, maxEducationItems).map((entry) => ({
     degree: entry.degree,
     institution: entry.institution,
     year: entry.year,
@@ -925,9 +1035,10 @@ function finalizeResumeContent(
     experience,
     projects,
     education,
-    achievements: (content.achievements || []).slice(0, 5),
-    languages: (content.languages || []).slice(0, 8),
-    hobbies: (content.hobbies || []).slice(0, 6),
+    section_visibility: content.section_visibility || getDefaultSectionVisibility(context.resumeSettings),
+    achievements: (content.achievements || []).slice(0, maxBullets),
+    languages: (content.languages || []).slice(0, maxBullets),
+    hobbies: (content.hobbies || []).slice(0, maxBullets),
   });
 }
 
@@ -939,9 +1050,9 @@ function removeEmptyOptionalSections(content: ResumeContent): ResumeContent {
   return next;
 }
 
-function validateFinalResumeContent(content: ResumeContent, candidateEvidence: CandidateEvidence) {
+function validateFinalResumeContent(content: ResumeContent, candidateEvidence: CandidateEvidence, resumeSettings?: ResumeSettings) {
   const summaryWords = content.summary.trim().split(/\s+/).filter(Boolean).length;
-  if (summaryWords > 110) {
+  if (summaryWords > getSummaryWordLimit(resumeSettings)) {
     throw new Error('Generated summary exceeded max length');
   }
 
@@ -958,6 +1069,9 @@ function validateFinalResumeContent(content: ResumeContent, candidateEvidence: C
     if (!Array.isArray(experience.bullets) || experience.bullets.length === 0) {
       throw new Error('Experience entries must contain bullets');
     }
+    if (experience.bullets.length > getMaxBulletsPerSection(resumeSettings)) {
+      throw new Error('Experience section exceeded max bullet count');
+    }
     if (experience.bullets.some((bullet) => bullet.length > 240)) {
       throw new Error('Experience bullet too long');
     }
@@ -968,11 +1082,11 @@ function validateFinalResumeContent(content: ResumeContent, candidateEvidence: C
   }
 }
 
-function compactSummary(summary: string, jdParse: JDParse, fallback: string) {
+function compactSummary(summary: string, jdParse: JDParse, fallback: string, maxWords = 25) {
   const source = (summary || fallback || '').trim();
   if (!source) return '';
   const words = source.split(/\s+/).filter(Boolean);
-  const compacted = words.slice(0, 110).join(' ');
+  const compacted = words.slice(0, maxWords).join(' ');
   if (compacted.length <= 700) return compacted;
   return compacted.slice(0, 697).trimEnd() + '...';
 }
@@ -1001,6 +1115,158 @@ function enforceBulletQuality(bullets: string[], maxBullets: number) {
   });
 
   return (sorted.length > 0 ? sorted : ['Delivered role-relevant outcomes with measurable impact where available.']).slice(0, maxBullets);
+}
+
+function getSummaryWordLimit(settings?: ResumeSettings) {
+  return settings?.formatting.summaryMaxWords ?? 25;
+}
+
+function getMaxBulletsPerSection(settings?: ResumeSettings) {
+  return settings?.formatting.maxBulletsPerSection ?? 5;
+}
+
+function getDefaultSectionVisibility(settings?: ResumeSettings) {
+  return {
+    summary: settings?.structure.defaultSectionVisibility.summary ?? true,
+    skills: settings?.structure.defaultSectionVisibility.skills ?? true,
+    experience: settings?.structure.defaultSectionVisibility.experience ?? true,
+    projects: settings?.structure.defaultSectionVisibility.projects ?? true,
+    achievements: settings?.structure.defaultSectionVisibility.achievements ?? true,
+    education: settings?.structure.defaultSectionVisibility.education ?? true,
+    languages: settings?.structure.defaultSectionVisibility.languages ?? true,
+    hobbies: settings?.structure.defaultSectionVisibility.hobbies ?? true,
+  };
+}
+
+function buildSyntheticJobDescription(
+  jobTitle: string,
+  matchedKeywords: string[],
+  missingKeywords: string[],
+  suggestions: Suggestion[]
+) {
+  return [
+    `Target role: ${jobTitle}`,
+    matchedKeywords.length ? `Matched context: ${matchedKeywords.join(', ')}` : '',
+    missingKeywords.length ? `Missing keywords: ${missingKeywords.join(', ')}` : '',
+    suggestions.length ? `Improvement suggestions: ${suggestions.map((item) => `${item.action} (${item.reason})`).join('; ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function buildAiImprovePrompt(input: {
+  companyName: string;
+  jobTitle: string;
+  currentResumeContent: ResumeContent;
+  matchedKeywords: string[];
+  missingKeywords: string[];
+  suggestions: Suggestion[];
+  focusText?: string;
+  candidateProfile: FullProfile;
+  jdParse: JDParse;
+  candidateEvidence: CandidateEvidence;
+  mappings: RelevanceMapping;
+  promptTemplates: {
+    experienceRewrite?: ResumeSettings['prompts']['experienceRewrite'];
+    summaryGeneration?: ResumeSettings['prompts']['summaryGeneration'];
+    atsEvaluation?: ResumeSettings['prompts']['atsEvaluation'];
+    finalAssembly?: ResumeSettings['prompts']['finalAssembly'];
+  };
+}) {
+  return `
+You are improving a tailored resume for "${input.jobTitle}" at "${input.companyName}".
+
+Your job:
+- improve ATS relevance naturally
+- keep all claims grounded in candidate evidence
+- use the candidate profile, stored JD analysis, ATS gaps, and current resume together
+- follow the active prompt-template intent below for summary, bullet rewriting, ATS improvement, and final assembly
+
+Never:
+- invent new experience, tools, metrics, scope, or achievements
+- stuff keywords unnaturally
+- remove accurate high-value details unless needed for clarity
+
+Output only valid JSON:
+{
+  "resume_content": {
+    "summary": "string",
+    "skills": {},
+    "section_visibility": {},
+    "experience": [],
+    "projects": [],
+    "education": [],
+    "achievements": [],
+    "languages": [],
+    "hobbies": []
+  }
+}
+
+Focus text:
+<focus_text>
+${input.focusText || ''}
+</focus_text>
+
+Active summary prompt intent:
+<summary_prompt>
+${(input.promptTemplates.summaryGeneration?.activeMode === 'custom'
+    ? input.promptTemplates.summaryGeneration.customTemplate
+    : input.promptTemplates.summaryGeneration?.defaultTemplate) || ''}
+</summary_prompt>
+
+Active experience rewrite prompt intent:
+<experience_rewrite_prompt>
+${(input.promptTemplates.experienceRewrite?.activeMode === 'custom'
+    ? input.promptTemplates.experienceRewrite.customTemplate
+    : input.promptTemplates.experienceRewrite?.defaultTemplate) || ''}
+</experience_rewrite_prompt>
+
+Active ATS evaluation prompt intent:
+<ats_prompt>
+${(input.promptTemplates.atsEvaluation?.activeMode === 'custom'
+    ? input.promptTemplates.atsEvaluation.customTemplate
+    : input.promptTemplates.atsEvaluation?.defaultTemplate) || ''}
+</ats_prompt>
+
+Active final assembly prompt intent:
+<final_assembly_prompt>
+${(input.promptTemplates.finalAssembly?.activeMode === 'custom'
+    ? input.promptTemplates.finalAssembly.customTemplate
+    : input.promptTemplates.finalAssembly?.defaultTemplate) || ''}
+</final_assembly_prompt>
+
+Candidate profile:
+<candidate_profile>
+${JSON.stringify(buildCandidateSnapshot(input.candidateProfile), null, 2)}
+</candidate_profile>
+
+JD parse:
+<jd_parse>
+${JSON.stringify(input.jdParse, null, 2)}
+</jd_parse>
+
+Candidate evidence:
+<candidate_evidence>
+${JSON.stringify(input.candidateEvidence, null, 2)}
+</candidate_evidence>
+
+Requirement mappings:
+<mappings>
+${JSON.stringify(input.mappings, null, 2)}
+</mappings>
+
+Matched keywords:
+${JSON.stringify(input.matchedKeywords, null, 2)}
+
+Missing keywords:
+${JSON.stringify(input.missingKeywords, null, 2)}
+
+ATS suggestions:
+${JSON.stringify(input.suggestions, null, 2)}
+
+Current resume content:
+${JSON.stringify(input.currentResumeContent, null, 2)}
+`;
 }
 
 function scoreReadability(content: ResumeContent) {

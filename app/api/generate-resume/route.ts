@@ -65,6 +65,7 @@ export async function POST(request: Request) {
       coverLetterTone: body.cover_letter_tone,
       jobDescription: body.job_description,
       candidateProfile: effectiveProfile,
+      resumeSettings: userSettings.resume,
     });
 
     if (!userSettings.privacy.keepResumeHistory) {
@@ -75,9 +76,9 @@ export async function POST(request: Request) {
       rows: [resume],
     } = await db.query(
       `INSERT INTO resumes
-         (user_id, template_id, company_name, job_title, source_platform, resume_content, cover_letter, cover_letter_tone,
+         (user_id, template_id, company_name, job_title, source_platform, resume_content, analysis_snapshot, cover_letter, cover_letter_tone,
           ats_score, matched_keywords, missing_keywords, suggestions)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING id, created_at`,
       [
         userId,
@@ -86,6 +87,12 @@ export async function POST(request: Request) {
         body.job_title,
         body.source_platform,
         JSON.stringify(tailored.resumeContent),
+        JSON.stringify({
+          jdParse: tailored.jdParse,
+          candidateSnapshot: tailored.candidateSnapshot,
+          candidateEvidence: tailored.candidateEvidence,
+          mappings: tailored.mappings,
+        }),
         tailored.coverLetter,
         body.cover_letter_tone,
         tailored.atsReport.overallScore,

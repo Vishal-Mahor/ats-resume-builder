@@ -6,14 +6,28 @@ import { useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { api, type ResumeTemplate, type UserSettings } from '@/lib/api';
 
-type SettingsTab = 'general' | 'notifications' | 'exports' | 'privacy';
+type SettingsTab = 'general' | 'notifications' | 'exports' | 'privacy' | 'resume';
 
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; description: string }> = [
   { id: 'general', label: 'General', description: 'Workspace identity and default behavior' },
   { id: 'notifications', label: 'Notifications', description: 'Email and workflow alerts' },
   { id: 'exports', label: 'Exports', description: 'PDF naming and template defaults' },
   { id: 'privacy', label: 'Privacy', description: 'Data retention and verification status' },
+  { id: 'resume', label: 'Resume', description: 'Formatting, structure, and prompt templates' },
 ];
+
+function createPromptDefaults() {
+  return {
+    jdParsing: { label: 'JD parsing', description: 'Parse the job description.', defaultTemplate: 'Default JD parsing prompt.', customTemplate: '', activeMode: 'default' as const },
+    candidateEvidence: { label: 'Candidate evidence', description: 'Extract evidence from profile.', defaultTemplate: 'Default candidate evidence prompt.', customTemplate: '', activeMode: 'default' as const },
+    relevanceMapping: { label: 'Relevance mapping', description: 'Map JD to evidence.', defaultTemplate: 'Default relevance mapping prompt.', customTemplate: '', activeMode: 'default' as const },
+    experienceRewrite: { label: 'Experience rewrite', description: 'Rewrite experience and project bullets.', defaultTemplate: 'Default experience rewrite prompt.', customTemplate: '', activeMode: 'default' as const },
+    summaryGeneration: { label: 'Summary generation', description: 'Generate the summary.', defaultTemplate: 'Default summary generation prompt.', customTemplate: '', activeMode: 'default' as const },
+    atsEvaluation: { label: 'ATS evaluation', description: 'Score ATS alignment.', defaultTemplate: 'Default ATS evaluation prompt.', customTemplate: '', activeMode: 'default' as const },
+    finalAssembly: { label: 'Final assembly', description: 'Assemble the final resume.', defaultTemplate: 'Default final assembly prompt.', customTemplate: '', activeMode: 'default' as const },
+    coverLetter: { label: 'Cover letter', description: 'Generate the cover letter.', defaultTemplate: 'Default cover letter prompt.', customTemplate: '', activeMode: 'default' as const },
+  };
+}
 
 const DEFAULT_SETTINGS: UserSettings = {
   workspaceName: 'ATS Resume Builder Workspace',
@@ -35,6 +49,33 @@ const DEFAULT_SETTINGS: UserSettings = {
     keepResumeHistory: true,
     allowAiReuse: true,
     requireVerificationBeforeExport: false,
+  },
+  resume: {
+    formatting: {
+      summaryMaxWords: 25,
+      maxBulletsPerSection: 5,
+      skillsSeparator: 'comma',
+      linkStyle: 'compact',
+      pageSize: 'A4',
+      repeatSectionHeadingsOnNewPage: true,
+      showPageNumbers: true,
+    },
+    structure: {
+      sectionOrder: ['summary', 'skills', 'experience', 'projects', 'achievements', 'education', 'languages', 'hobbies'],
+      defaultSectionVisibility: {
+        summary: true,
+        skills: true,
+        experience: true,
+        projects: true,
+        achievements: true,
+        education: true,
+        languages: true,
+        hobbies: true,
+      },
+      maxProjects: 4,
+      maxEducationItems: 3,
+    },
+    prompts: createPromptDefaults(),
   },
 };
 
@@ -357,6 +398,306 @@ export default function SettingsPage() {
           </SectionCard>
         )}
 
+        {activeTab === 'resume' && (
+          <div className="space-y-6">
+            <SectionCard
+              eyebrow="Resume formatting"
+              title="Control how resumes are generated and rendered"
+              description="These values are saved to your account and used by generation, preview, and export."
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <InputCard
+                  label="Summary max words"
+                  value={String(settings.resume.formatting.summaryMaxWords)}
+                  onChange={(value) =>
+                    setSettings((current) => ({
+                      ...current,
+                      resume: {
+                        ...current.resume,
+                        formatting: {
+                          ...current.resume.formatting,
+                          summaryMaxWords: clampNumber(value, current.resume.formatting.summaryMaxWords, 10, 80),
+                        },
+                      },
+                    }))
+                  }
+                />
+                <InputCard
+                  label="Max bullets per section"
+                  value={String(settings.resume.formatting.maxBulletsPerSection)}
+                  onChange={(value) =>
+                    setSettings((current) => ({
+                      ...current,
+                      resume: {
+                        ...current.resume,
+                        formatting: {
+                          ...current.resume.formatting,
+                          maxBulletsPerSection: clampNumber(value, current.resume.formatting.maxBulletsPerSection, 1, 10),
+                        },
+                      },
+                    }))
+                  }
+                />
+                <SelectCard
+                  label="Skills separator"
+                  value={settings.resume.formatting.skillsSeparator}
+                  options={[
+                    { value: 'comma', label: 'Comma separated' },
+                    { value: 'bullet', label: 'Bullet separator' },
+                  ]}
+                  onChange={(value) =>
+                    setSettings((current) => ({
+                      ...current,
+                      resume: {
+                        ...current.resume,
+                        formatting: { ...current.resume.formatting, skillsSeparator: value as UserSettings['resume']['formatting']['skillsSeparator'] },
+                      },
+                    }))
+                  }
+                />
+                <SelectCard
+                  label="Link display"
+                  value={settings.resume.formatting.linkStyle}
+                  options={[
+                    { value: 'compact', label: 'Compact labels' },
+                    { value: 'full', label: 'Full links' },
+                  ]}
+                  onChange={(value) =>
+                    setSettings((current) => ({
+                      ...current,
+                      resume: {
+                        ...current.resume,
+                        formatting: { ...current.resume.formatting, linkStyle: value as UserSettings['resume']['formatting']['linkStyle'] },
+                      },
+                    }))
+                  }
+                />
+                <SelectCard
+                  label="Page size"
+                  value={settings.resume.formatting.pageSize}
+                  options={[
+                    { value: 'A4', label: 'A4' },
+                    { value: 'Letter', label: 'Letter' },
+                  ]}
+                  onChange={(value) =>
+                    setSettings((current) => ({
+                      ...current,
+                      resume: {
+                        ...current.resume,
+                        formatting: { ...current.resume.formatting, pageSize: value as UserSettings['resume']['formatting']['pageSize'] },
+                      },
+                    }))
+                  }
+                />
+              </div>
+              <div className="mt-4 space-y-3">
+                <ToggleRow
+                  label="Repeat headings on continued pages"
+                  description="If a section continues on page 2 or later, print the section heading again."
+                  checked={settings.resume.formatting.repeatSectionHeadingsOnNewPage}
+                  onChange={(checked) =>
+                    setSettings((current) => ({
+                      ...current,
+                      resume: {
+                        ...current.resume,
+                        formatting: { ...current.resume.formatting, repeatSectionHeadingsOnNewPage: checked },
+                      },
+                    }))
+                  }
+                />
+                <ToggleRow
+                  label="Show page numbers"
+                  description="Add page numbers when the resume flows to multiple pages."
+                  checked={settings.resume.formatting.showPageNumbers}
+                  onChange={(checked) =>
+                    setSettings((current) => ({
+                      ...current,
+                      resume: {
+                        ...current.resume,
+                        formatting: { ...current.resume.formatting, showPageNumbers: checked },
+                      },
+                    }))
+                  }
+                />
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              eyebrow="Resume structure"
+              title="Choose section defaults and layout limits"
+              description="These defaults guide new resume generation and the default structure in the editor."
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <InputCard
+                  label="Max projects"
+                  value={String(settings.resume.structure.maxProjects)}
+                  onChange={(value) =>
+                    setSettings((current) => ({
+                      ...current,
+                      resume: {
+                        ...current.resume,
+                        structure: {
+                          ...current.resume.structure,
+                          maxProjects: clampNumber(value, current.resume.structure.maxProjects, 1, 8),
+                        },
+                      },
+                    }))
+                  }
+                />
+                <InputCard
+                  label="Max education items"
+                  value={String(settings.resume.structure.maxEducationItems)}
+                  onChange={(value) =>
+                    setSettings((current) => ({
+                      ...current,
+                      resume: {
+                        ...current.resume,
+                        structure: {
+                          ...current.resume.structure,
+                          maxEducationItems: clampNumber(value, current.resume.structure.maxEducationItems, 1, 6),
+                        },
+                      },
+                    }))
+                  }
+                />
+              </div>
+              <div className="mt-5">
+                <div className="text-sm font-semibold text-[var(--text-primary)]">Section order</div>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                  Use a comma-separated list from: summary, skills, experience, projects, achievements, education, languages, hobbies
+                </p>
+                <textarea
+                  value={settings.resume.structure.sectionOrder.join(', ')}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      resume: {
+                        ...current.resume,
+                        structure: {
+                          ...current.resume.structure,
+                          sectionOrder: normalizeSectionOrder(event.target.value, current.resume.structure.sectionOrder),
+                        },
+                      },
+                    }))
+                  }
+                  className="input-shell mt-3 min-h-[88px] w-full"
+                />
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                {Object.entries(settings.resume.structure.defaultSectionVisibility).map(([key, checked]) => (
+                  <ToggleRow
+                    key={key}
+                    label={`Keep ${formatSectionLabel(key)} by default`}
+                    description={`New resumes and default previews start with ${formatSectionLabel(key).toLowerCase()} ${checked ? 'enabled' : 'disabled'}.`}
+                    checked={checked}
+                    onChange={(nextChecked) =>
+                      setSettings((current) => ({
+                        ...current,
+                        resume: {
+                          ...current.resume,
+                          structure: {
+                            ...current.resume.structure,
+                            defaultSectionVisibility: {
+                              ...current.resume.structure.defaultSectionVisibility,
+                              [key]: nextChecked,
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                ))}
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              eyebrow="Prompt templates"
+              title="Choose the active prompt per resume stage"
+              description="If a custom prompt is marked active, only that prompt is used for that section. If not, the visible default prompt runs."
+            >
+              <div className="space-y-5">
+                {Object.entries(settings.resume.prompts).map(([key, prompt]) => (
+                  <div key={key} className="app-panel-muted p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-[var(--text-primary)]">{prompt.label}</div>
+                        <div className="mt-1 text-sm text-[var(--text-secondary)]">{prompt.description}</div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSettings((current) => ({
+                              ...current,
+                              resume: {
+                                ...current.resume,
+                                prompts: {
+                                  ...current.resume.prompts,
+                                  [key]: { ...current.resume.prompts[key as keyof UserSettings['resume']['prompts']], activeMode: 'default' },
+                                },
+                              },
+                            }))
+                          }
+                          className={prompt.activeMode === 'default' ? 'app-button-primary px-3 py-2 text-xs' : 'app-button-secondary px-3 py-2 text-xs'}
+                        >
+                          Use default
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSettings((current) => ({
+                              ...current,
+                              resume: {
+                                ...current.resume,
+                                prompts: {
+                                  ...current.resume.prompts,
+                                  [key]: { ...current.resume.prompts[key as keyof UserSettings['resume']['prompts']], activeMode: 'custom' },
+                                },
+                              },
+                            }))
+                          }
+                          className={prompt.activeMode === 'custom' ? 'app-button-primary px-3 py-2 text-xs' : 'app-button-secondary px-3 py-2 text-xs'}
+                        >
+                          Use custom
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                      <label className="block">
+                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">Default template</div>
+                        <textarea value={prompt.defaultTemplate} readOnly className="input-shell mt-3 min-h-[240px] w-full opacity-80" />
+                      </label>
+                      <label className="block">
+                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">Custom template</div>
+                        <textarea
+                          value={prompt.customTemplate}
+                          onChange={(event) =>
+                            setSettings((current) => ({
+                              ...current,
+                              resume: {
+                                ...current.resume,
+                                prompts: {
+                                  ...current.resume.prompts,
+                                  [key]: {
+                                    ...current.resume.prompts[key as keyof UserSettings['resume']['prompts']],
+                                    customTemplate: event.target.value,
+                                  },
+                                },
+                              },
+                            }))
+                          }
+                          placeholder={`Write the custom ${prompt.label.toLowerCase()} prompt here. Use the visible default as the base if you want full control.`}
+                          className="input-shell mt-3 min-h-[240px] w-full"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          </div>
+        )}
+
       </section>
 
       <aside className="space-y-6">
@@ -582,6 +923,30 @@ function CountryAutocompleteInput({
       </div>
     </label>
   );
+}
+
+function clampNumber(raw: string, fallback: number, min: number, max: number) {
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.min(Math.max(parsed, min), max);
+}
+
+function normalizeSectionOrder(
+  raw: string,
+  fallback: UserSettings['resume']['structure']['sectionOrder']
+): UserSettings['resume']['structure']['sectionOrder'] {
+  const allowed = new Set(['summary', 'skills', 'experience', 'projects', 'achievements', 'education', 'languages', 'hobbies']);
+  const requested = raw
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter((item): item is UserSettings['resume']['structure']['sectionOrder'][number] => allowed.has(item));
+  const unique = Array.from(new Set(requested));
+  if (unique.length < 5) return fallback;
+  return unique;
+}
+
+function formatSectionLabel(value: string) {
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function MiniMetric({ label, value }: { label: string; value: string }) {

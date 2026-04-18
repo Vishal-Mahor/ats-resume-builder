@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuthUserId } from '@/lib/server/auth-token';
 import { handleRouteError } from '@/lib/server/http';
 import { getFullProfile } from '@/lib/server/profile-service';
+import { getUserSettings } from '@/lib/server/settings-service';
 import { assertCanUse, consumeUsage } from '@/lib/server/billing-service';
 import { analyzeCandidateAgainstJD } from '@/lib/server/tailoring-pipeline';
 
@@ -17,11 +18,12 @@ export async function POST(request: Request) {
     const userId = requireAuthUserId(request);
     const body = analysisSchema.parse(await request.json());
     await assertCanUse(userId, 'jd-analysis');
-    const userProfile = await getFullProfile(userId);
+    const [userProfile, userSettings] = await Promise.all([getFullProfile(userId), getUserSettings(userId)]);
 
     const result = await analyzeCandidateAgainstJD({
       jobDescription: body.job_description,
       candidateProfile: userProfile,
+      resumeSettings: userSettings.resume,
     });
     await consumeUsage(userId, 'jd-analysis');
 

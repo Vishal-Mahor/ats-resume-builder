@@ -42,6 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_resume_templates_active_sort
 ON resume_templates(is_active, sort_order);
 
 ALTER TABLE resumes ADD COLUMN template_id TEXT REFERENCES resume_templates(id);
+ALTER TABLE resumes ADD COLUMN analysis_snapshot TEXT DEFAULT '{}';
 
 CREATE TABLE IF NOT EXISTS user_settings (
   id                                 TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -60,6 +61,9 @@ CREATE TABLE IF NOT EXISTS user_settings (
   privacy_keep_resume_history        INTEGER NOT NULL DEFAULT 1,
   privacy_allow_ai_reuse             INTEGER NOT NULL DEFAULT 1,
   privacy_require_verification       INTEGER NOT NULL DEFAULT 0,
+  resume_preferences                 TEXT NOT NULL DEFAULT '{}',
+  resume_structure                   TEXT NOT NULL DEFAULT '{}',
+  resume_prompt_templates            TEXT NOT NULL DEFAULT '{}',
   created_at                         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at                         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE(user_id)
@@ -67,3 +71,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
 
 CREATE INDEX IF NOT EXISTS idx_user_settings_user
 ON user_settings(user_id);
+
+ALTER TABLE user_settings ADD COLUMN resume_preferences TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE user_settings ADD COLUMN resume_structure TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE user_settings ADD COLUMN resume_prompt_templates TEXT NOT NULL DEFAULT '{}';

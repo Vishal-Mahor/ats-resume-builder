@@ -47,7 +47,8 @@ export async function GET(request: Request, context: RouteContext) {
         linkedin: resume.linkedin,
         github: resume.github,
       },
-      resume.resume_content
+      resume.resume_content,
+      userSettings.resume
     );
 
     return new Response(pdfBuffer, {

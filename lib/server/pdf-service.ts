@@ -1,148 +1,85 @@
 import puppeteer from 'puppeteer';
+import {
+  A4_PAGE_PADDING_X,
+  A4_PAGE_PADDING_Y,
+  DEFAULT_RESUME_FORMATTING,
+  type ResumeMeta,
+  formatDateRange,
+  getContactItems,
+  getPageMetrics,
+  paginateResume,
+} from '@/lib/resume-render';
+import type { ResumeContent, ResumeSettings } from '@/lib/api';
 
-export interface ResumeContent {
-  summary: string;
-  skills: {
-    technical:
-      | string[]
-      | {
-          languages?: string[];
-          backend_frameworks?: string[];
-          ai_genai?: string[];
-          streaming_messaging?: string[];
-          databases_storage?: string[];
-          cloud_infra?: string[];
-          tools_platforms?: string[];
-          programming_languages?: string[];
-          frameworks?: string[];
-          cloud?: string[];
-          databases?: string[];
-          tools?: string[];
-          other?: string[];
-        };
-    tools?: string[];
-    other?: string[];
-    soft?: string[];
-  };
-  experience: Array<{
-    job_title: string;
-    company: string;
-    location?: string;
-    start_date: string;
-    end_date: string;
-    bullets: string[];
-  }>;
-  projects: Array<{ name: string; tech_stack: string; description?: string; summary?: string; bullets?: string[]; url?: string }>;
-  education: Array<{ degree: string; institution: string; year: string; gpa?: string; bullets?: string[] }>;
-  achievements?: string[];
-  languages?: string[];
-  hobbies?: string[];
-}
+export type UserMeta = ResumeMeta;
 
-export interface UserMeta {
-  name: string;
-  email: string;
-  phone?: string;
-  location?: string;
-  linkedin?: string;
-  github?: string;
-}
-
-function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
-  const skillGroups = getSkillGroups(content.skills);
-
-  const experienceHtml = content.experience
-    .map(
-      (experience) => `
-    <div class="entry">
-      <div class="entry-header">
-        <span class="entry-title">${experience.job_title}</span>
-        <span class="entry-date">${experience.start_date} – ${experience.end_date}</span>
-      </div>
-      <div class="entry-sub">${experience.company}${experience.location ? `, ${experience.location}` : ''}</div>
-      <ul>
-        ${experience.bullets.map((bullet) => `<li>${bullet}</li>`).join('\n')}
-      </ul>
-    </div>
-  `
-    )
-    .join('');
-
-  const projectsHtml = content.projects
-    .map(
-      (project) => `
-    <div class="entry">
-      <div class="entry-header">
-        <span class="entry-title">${project.name}</span>
-        <span class="entry-sub-inline">${project.tech_stack}</span>
-      </div>
-      ${project.summary ? `<div class="entry-sub">${project.summary}</div>` : ''}
-      <ul>${getProjectBullets(project).map((bullet) => `<li>${bullet}</li>`).join('')}</ul>
-    </div>
-  `
-    )
-    .join('');
-
-  const educationHtml = content.education
-    .map(
-      (entry) => `
-    <div class="entry">
-      <div class="entry-header">
-        <span class="entry-title">${entry.degree}</span>
-        <span class="entry-date">${entry.year}</span>
-      </div>
-      <div class="entry-sub">${entry.institution}${entry.gpa ? ` | GPA: ${entry.gpa}` : ''}</div>
-      ${entry.bullets?.length ? `<ul>${entry.bullets.map((bullet) => `<li>${bullet}</li>`).join('')}</ul>` : ''}
-    </div>
-  `
-    )
-    .join('');
-
-  const achievementsHtml = (content.achievements || []).map((item) => `<li>${item}</li>`).join('');
-
-  const contact = [meta.email, meta.phone, meta.linkedin, meta.github, meta.location]
-    .filter(Boolean)
-    .join(' | ');
+function buildResumeHtml(meta: UserMeta, content: ResumeContent, settings?: ResumeSettings) {
+  const { pages } = paginateResume(meta, content, settings);
+  const contactItems = getContactItems(meta, settings);
+  const pageMetrics = getPageMetrics(settings);
+  const skillsSeparator = settings?.formatting.skillsSeparator ?? DEFAULT_RESUME_FORMATTING.skillsSeparator;
+  const showPageNumbers = settings?.formatting.showPageNumbers ?? DEFAULT_RESUME_FORMATTING.showPageNumbers;
+  const pageSize = settings?.formatting.pageSize ?? DEFAULT_RESUME_FORMATTING.pageSize;
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @page { size: ${pageSize}; margin: 0; }
+  * { box-sizing: border-box; }
   body {
+    margin: 0;
+    background: #dfe7f6;
     font-family: 'Times New Roman', Times, serif;
-    font-size: 11pt;
     color: #111;
-    line-height: 1.4;
-    padding: 0.75in;
   }
+  .page {
+    width: ${pageMetrics.width}px;
+    min-height: ${pageMetrics.height}px;
+    height: ${pageMetrics.height}px;
+    padding: ${A4_PAGE_PADDING_Y}px ${A4_PAGE_PADDING_X}px;
+    margin: 0 auto 24px;
+    background: #fff;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: auto; margin-bottom: 0; }
   h1.name {
     font-family: Arial, sans-serif;
     font-size: 20pt;
     font-weight: bold;
     text-align: center;
-    margin-bottom: 4px;
+    margin: 0 0 4px;
   }
   .contact {
-    text-align: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
     font-size: 9.5pt;
-    color: #333;
-    margin-bottom: 14px;
+    color: #444;
     border-bottom: 1.5pt solid #111;
-    padding-bottom: 8px;
+    padding-bottom: 10px;
+    margin-bottom: 14px;
   }
+  .contact a { color: #444; text-decoration: none; }
   .section-title {
     font-family: Arial, sans-serif;
-    font-size: 10pt;
-    font-weight: bold;
+    font-size: 9.5pt;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.8px;
     border-bottom: 0.75pt solid #999;
     padding-bottom: 2px;
     margin: 12px 0 5px;
   }
-  .summary { font-size: 10.5pt; line-height: 1.45; }
+  p.summary, p.skills-line, p.project-summary {
+    font-size: 10.5pt;
+    line-height: 1.45;
+    margin: 0 0 4px;
+  }
   .skills-line { font-size: 10pt; }
   .entry { margin-bottom: 8px; }
   .entry-header {
@@ -150,98 +87,127 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent) {
     justify-content: space-between;
     align-items: baseline;
   }
-  .entry-title { font-weight: bold; font-size: 10.5pt; font-family: Arial, sans-serif; }
-  .entry-date { font-size: 9.5pt; color: #444; white-space: nowrap; }
-  .entry-sub { font-size: 10pt; color: #333; margin-bottom: 3px; }
-  .entry-sub-inline { font-size: 9.5pt; color: #555; font-style: italic; }
-  ul { padding-left: 14px; margin-top: 3px; }
-  li { font-size: 10.5pt; margin-bottom: 2px; }
+  .entry-title {
+    font-family: Arial, sans-serif;
+    font-size: 10.5pt;
+    font-weight: 700;
+  }
+  .entry-date {
+    font-size: 9.5pt;
+    color: #444;
+    white-space: nowrap;
+  }
+  .entry-sub {
+    font-size: 10pt;
+    color: #444;
+    margin-bottom: 3px;
+  }
+  .entry-sub-inline {
+    font-size: 9.5pt;
+    color: #666;
+    font-style: italic;
+  }
+  ul {
+    margin: 0;
+    padding-left: 14px;
+    list-style-type: disc;
+  }
+  li {
+    font-size: 10.5pt;
+    margin-bottom: 2px;
+  }
+  .page-number {
+    position: absolute;
+    right: 28px;
+    bottom: 18px;
+    font-family: Arial, sans-serif;
+    font-size: 8.5pt;
+    color: #7a7a7a;
+  }
 </style>
 </head>
 <body>
-  <h1 class="name">${meta.name}</h1>
-  <div class="contact">${contact}</div>
-
-  <div class="section-title">Summary</div>
-  <p class="summary">${compactSummaryForPdf(content.summary)}</p>
-
-  <div class="section-title">Skills</div>
-  ${skillGroups.map((group) => `<p class="skills-line"><strong>${group.label}:</strong> ${group.values.join(' • ')}</p>`).join('')}
-
-  <div class="section-title">Experience</div>
-  ${experienceHtml}
-
-  <div class="section-title">Projects</div>
-  ${projectsHtml}
-
-  ${achievementsHtml ? `
-  <div class="section-title">Achievements</div>
-  <ul>${achievementsHtml}</ul>
-  ` : ''}
-
-  <div class="section-title">Education</div>
-  ${educationHtml}
-
-  ${content.languages?.length ? `
-  <div class="section-title">Languages</div>
-  <p class="skills-line">${content.languages.join(', ')}</p>
-  ` : ''}
-
-  ${content.hobbies?.length ? `
-  <div class="section-title">Hobbies</div>
-  <p class="skills-line">${content.hobbies.join(', ')}</p>
-  ` : ''}
+${pages.map((blocks, pageIndex) => `
+  <div class="page">
+    <h1 class="name">${escapeHtml(meta.name)}</h1>
+    <div class="contact">
+      ${contactItems.map((item) => item.href
+        ? `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`
+        : `<span>${escapeHtml(item.label)}</span>`).join('')}
+    </div>
+    ${blocks.map((block) => {
+      if (block.type === 'summary') {
+        return `
+          ${block.showSectionTitle ? `<div class="section-title">Summary</div>` : ''}
+          <p class="summary">${escapeHtml(block.text)}</p>
+        `;
+      }
+      if (block.type === 'skills') {
+        return `
+          ${block.showSectionTitle ? `<div class="section-title">Skills</div>` : ''}
+          ${block.groups.map((group) => `<p class="skills-line"><strong>${escapeHtml(group.label)}:</strong> ${escapeHtml(group.values.join(skillsSeparator === 'comma' ? ', ' : ' • '))}</p>`).join('')}
+        `;
+      }
+      if (block.type === 'experience') {
+        return `
+          ${block.showSectionTitle ? `<div class="section-title">Experience</div>` : ''}
+          <div class="entry">
+            <div class="entry-header">
+              <span class="entry-title">${escapeHtml(block.item.job_title)}</span>
+              <span class="entry-date">${escapeHtml(formatDateRange(block.item.start_date, block.item.end_date, block.item.is_current))}</span>
+            </div>
+            <div class="entry-sub">${escapeHtml(block.item.company)}${block.item.location ? `, ${escapeHtml(block.item.location)}` : ''}</div>
+            <ul>${block.item.bullets.map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join('')}</ul>
+          </div>
+        `;
+      }
+      if (block.type === 'project') {
+        return `
+          ${block.showSectionTitle ? `<div class="section-title">Projects</div>` : ''}
+          <div class="entry">
+            <div class="entry-header">
+              <span class="entry-title">${escapeHtml(block.item.name)}</span>
+              <span class="entry-sub-inline">${escapeHtml(block.item.tech_stack)}</span>
+            </div>
+            ${block.item.summary ? `<p class="project-summary">${escapeHtml(block.item.summary)}</p>` : ''}
+            <ul>${(block.item.bullets || []).map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join('')}</ul>
+          </div>
+        `;
+      }
+      if (block.type === 'education') {
+        return `
+          ${block.showSectionTitle ? `<div class="section-title">Education</div>` : ''}
+          <div class="entry">
+            <div class="entry-header">
+              <span class="entry-title">${escapeHtml(block.item.degree)}</span>
+              <span class="entry-date">${escapeHtml(block.item.year)}</span>
+            </div>
+            <ul>${(block.item.bullets || []).map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join('')}</ul>
+          </div>
+        `;
+      }
+      return `
+        ${block.showSectionTitle ? `<div class="section-title">${escapeHtml(block.title)}</div>` : ''}
+        <ul>${block.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      `;
+    }).join('')}
+    ${pages.length > 1 && showPageNumbers ? `<div class="page-number">Page ${pageIndex + 1}</div>` : ''}
+  </div>
+`).join('')}
 </body>
 </html>`;
 }
 
-function getSkillGroups(skills: ResumeContent['skills']) {
-  if (Array.isArray(skills.technical)) {
-    return [
-      { label: 'Technical', values: skills.technical },
-      { label: 'Tools', values: skills.tools || [] },
-      { label: 'Other', values: skills.other || [] },
-      { label: 'Soft Skills', values: skills.soft || [] },
-    ].filter((group) => group.values.length > 0);
-  }
-
-  const technical = skills.technical || {};
-  return [
-    { label: 'Languages', values: technical.languages || technical.programming_languages || [] },
-    { label: 'Backend / Frameworks', values: technical.backend_frameworks || technical.frameworks || [] },
-    { label: 'AI / GenAI', values: technical.ai_genai || [] },
-    { label: 'Streaming / Messaging', values: technical.streaming_messaging || [] },
-    { label: 'Databases / Storage', values: technical.databases_storage || technical.databases || [] },
-    { label: 'Cloud / Infra', values: technical.cloud_infra || technical.cloud || [] },
-    { label: 'Tools / Platforms', values: technical.tools_platforms || technical.tools || [] },
-    { label: 'Other Technical', values: technical.other || [] },
-    { label: 'Soft Skills', values: skills.soft || [] },
-  ].filter((group) => group.values.length > 0);
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
-function compactSummaryForPdf(summary: string) {
-  const words = (summary || '').trim().split(/\s+/).filter(Boolean);
-  if (words.length <= 110) return summary.trim();
-  return `${words.slice(0, 110).join(' ')}...`;
-}
-
-function getProjectBullets(project: ResumeContent['projects'][number]) {
-  if (project.bullets?.length) {
-    return project.bullets;
-  }
-
-  if (project.description) {
-    return [project.description];
-  }
-
-  if (project.summary) {
-    return [project.summary];
-  }
-
-  return [];
-}
-
-export async function generateResumePdf(meta: UserMeta, content: ResumeContent) {
+export async function generateResumePdf(meta: UserMeta, content: ResumeContent, settings?: ResumeSettings) {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -249,10 +215,10 @@ export async function generateResumePdf(meta: UserMeta, content: ResumeContent) 
 
   try {
     const page = await browser.newPage();
-    await page.setContent(buildResumeHtml(meta, content), { waitUntil: 'networkidle0' });
+    await page.setContent(buildResumeHtml(meta, content, settings), { waitUntil: 'networkidle0' });
     const pdf = await page.pdf({
-      format: 'Letter',
-      printBackground: false,
+      format: settings?.formatting.pageSize ?? 'A4',
+      printBackground: true,
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
     });
 
@@ -276,7 +242,7 @@ export async function generateCoverLetterPdf(
 
   const paragraphs = coverLetter
     .split('\n\n')
-    .map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
     .join('');
 
   const html = `<!DOCTYPE html>
@@ -284,32 +250,24 @@ export async function generateCoverLetterPdf(
 <head>
 <meta charset="UTF-8">
 <style>
-  body { font-family: Arial, sans-serif; font-size: 11pt; color: #111; line-height: 1.6; padding: 1in; }
+  @page { size: A4; margin: 0; }
+  body { font-family: Arial, sans-serif; font-size: 11pt; color: #111; line-height: 1.6; margin: 0; padding: 24mm 18mm; }
   .header { margin-bottom: 32px; }
   .name { font-size: 16pt; font-weight: bold; }
   .contact { font-size: 9.5pt; color: #555; margin-top: 4px; }
-  .date { margin: 24px 0 16px; }
-  .to { margin-bottom: 24px; }
-  p { margin-bottom: 14px; }
-  .sign { margin-top: 28px; }
+  .date { margin-bottom: 28px; }
+  .subject { font-weight: bold; margin-bottom: 18px; }
+  p { margin: 0 0 14px; }
 </style>
 </head>
 <body>
   <div class="header">
-    <div class="name">${meta.name}</div>
-    <div class="contact">${[meta.email, meta.phone, meta.location].filter(Boolean).join(' | ')}</div>
+    <div class="name">${escapeHtml(meta.name)}</div>
+    <div class="contact">${escapeHtml(meta.email)}${meta.phone ? ` | ${escapeHtml(meta.phone)}` : ''}${meta.location ? ` | ${escapeHtml(meta.location)}` : ''}</div>
   </div>
-  <div class="date">${today}</div>
-  <div class="to">
-    <strong>Hiring Team</strong><br>
-    ${companyName}
-  </div>
-  <p><strong>Re: ${jobTitle}</strong></p>
+  <div class="date">${escapeHtml(today)}</div>
+  <div class="subject">Application for ${escapeHtml(jobTitle)} at ${escapeHtml(companyName)}</div>
   ${paragraphs}
-  <div class="sign">
-    Sincerely,<br><br>
-    <strong>${meta.name}</strong>
-  </div>
 </body>
 </html>`;
 
@@ -321,7 +279,12 @@ export async function generateCoverLetterPdf(
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdf = await page.pdf({ format: 'Letter', printBackground: false });
+    const pdf = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: 0, right: 0, bottom: 0, left: 0 },
+    });
+
     return Buffer.from(pdf);
   } finally {
     await browser.close();

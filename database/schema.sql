@@ -143,6 +143,9 @@ CREATE TABLE IF NOT EXISTS user_settings (
   privacy_keep_resume_history        INTEGER NOT NULL DEFAULT 1,
   privacy_allow_ai_reuse             INTEGER NOT NULL DEFAULT 1,
   privacy_require_verification       INTEGER NOT NULL DEFAULT 0,
+  resume_preferences                 TEXT NOT NULL DEFAULT '{}',
+  resume_structure                   TEXT NOT NULL DEFAULT '{}',
+  resume_prompt_templates            TEXT NOT NULL DEFAULT '{}',
   created_at                         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at                         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE(user_id)
@@ -214,6 +217,7 @@ CREATE TABLE IF NOT EXISTS resumes (
   company_name      TEXT NOT NULL,
   job_title         TEXT NOT NULL,
   resume_content    TEXT NOT NULL,
+  analysis_snapshot TEXT DEFAULT '{}',
   resume_html       TEXT,
   cover_letter      TEXT,
   cover_letter_tone TEXT DEFAULT 'formal',

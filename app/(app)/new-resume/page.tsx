@@ -12,6 +12,7 @@ import {
   type GenerateResult,
   type JDAnalysisResult,
   type ResumeTemplate,
+  type UserSettings,
 } from '@/lib/api';
 
 const SOURCE_OPTIONS = [
@@ -47,6 +48,7 @@ export default function NewResumePage() {
   const [templates, setTemplates] = useState<ResumeTemplate[]>([]);
   const [analysis, setAnalysis] = useState<JDAnalysisResult | null>(null);
   const [billing, setBilling] = useState<BillingSnapshot | null>(null);
+  const [settings, setSettings] = useState<UserSettings | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generationModalOpen, setGenerationModalOpen] = useState(false);
@@ -67,6 +69,7 @@ export default function NewResumePage() {
         setProfile(profileResult);
         setTemplates(templateResult);
         setBilling(billingResult);
+        setSettings(settingsResult);
         const requestedTemplate = searchParams.get('template');
         const fallbackTemplate =
           templateResult.find((template) => template.id === settingsResult.exports.defaultTemplate)?.id ??
@@ -560,7 +563,7 @@ export default function NewResumePage() {
                   <div className="max-h-[70vh] overflow-y-auto bg-[#ececee] p-5">
                     {generationPreviewTab === 'resume' ? (
                       <div className="mx-auto max-w-[760px] shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
-                        <ResumePreview meta={profileMeta} content={generatedResume.resume_content} />
+                        <ResumePreview meta={profileMeta} content={generatedResume.resume_content} settings={settings?.resume} />
                       </div>
                     ) : (
                       <div className="mx-auto max-w-3xl rounded-[28px] border border-black/6 bg-white p-8 text-sm leading-8 text-slate-700 shadow-[0_20px_60px_rgba(0,0,0,0.12)] whitespace-pre-wrap">

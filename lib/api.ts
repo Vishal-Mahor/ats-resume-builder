@@ -293,6 +293,53 @@ export interface UserSettings {
     allowAiReuse: boolean;
     requireVerificationBeforeExport: boolean;
   };
+  resume: ResumeSettings;
+}
+
+export type ResumePromptSection =
+  | 'jdParsing'
+  | 'candidateEvidence'
+  | 'relevanceMapping'
+  | 'experienceRewrite'
+  | 'summaryGeneration'
+  | 'atsEvaluation'
+  | 'finalAssembly'
+  | 'coverLetter';
+
+export interface ResumePromptTemplateSetting {
+  label: string;
+  description: string;
+  defaultTemplate: string;
+  customTemplate: string;
+  activeMode: 'default' | 'custom';
+}
+
+export interface ResumeSettings {
+  formatting: {
+    summaryMaxWords: number;
+    maxBulletsPerSection: number;
+    skillsSeparator: 'comma' | 'bullet';
+    linkStyle: 'compact' | 'full';
+    pageSize: 'A4' | 'Letter';
+    repeatSectionHeadingsOnNewPage: boolean;
+    showPageNumbers: boolean;
+  };
+  structure: {
+    sectionOrder: Array<'summary' | 'skills' | 'experience' | 'projects' | 'achievements' | 'education' | 'languages' | 'hobbies'>;
+    defaultSectionVisibility: {
+      summary: boolean;
+      skills: boolean;
+      experience: boolean;
+      projects: boolean;
+      achievements: boolean;
+      education: boolean;
+      languages: boolean;
+      hobbies: boolean;
+    };
+    maxProjects: number;
+    maxEducationItems: number;
+  };
+  prompts: Record<ResumePromptSection, ResumePromptTemplateSetting>;
 }
 
 export interface Experience {
@@ -326,6 +373,14 @@ export interface Resume extends ResumeSummary {
   cover_letter: string; cover_letter_tone: string;
   matched_keywords: string[]; missing_keywords: string[];
   suggestions: Suggestion[];
+  analysis_snapshot?: ResumeAnalysisSnapshot;
+}
+
+export interface ResumeAnalysisSnapshot {
+  jdParse: unknown;
+  candidateSnapshot: unknown;
+  candidateEvidence: unknown;
+  mappings: unknown;
 }
 
 export interface DashboardSummary {
@@ -361,6 +416,16 @@ export interface DashboardSummary {
 export interface ResumeContent {
   summary: string;
   skills: ResumeSkills;
+  section_visibility?: {
+    summary?: boolean;
+    skills?: boolean;
+    experience?: boolean;
+    projects?: boolean;
+    achievements?: boolean;
+    education?: boolean;
+    languages?: boolean;
+    hobbies?: boolean;
+  };
   experience: Array<{
     job_title: string; company: string; location?: string;
     start_date: string; end_date?: string; is_current?: boolean; bullets: string[];

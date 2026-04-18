@@ -195,7 +195,7 @@ export function normalizeResumeSkills(skills: ResumeSkills): NormalizedResumeSki
   return {
     technical: {
       languages: [...(technical.languages || technical.programming_languages || [])],
-      backend_frameworks: [...(technical.backend_frameworks || technical.frameworks || [])],
+      backend_frameworks: [...(technical.backend_frameworks || [])],
       ai_genai: [...(technical.ai_genai || [])],
       streaming_messaging: [...(technical.streaming_messaging || [])],
       databases_storage: [...(technical.databases_storage || technical.databases || [])],

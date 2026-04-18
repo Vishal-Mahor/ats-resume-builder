@@ -1,5 +1,25 @@
 import { z } from 'zod';
 import { db } from '@/lib/server/db';
+import { buildDefaultPromptTemplates } from '@/lib/server/prompts';
+
+const sectionVisibilitySchema = z.object({
+  summary: z.boolean(),
+  skills: z.boolean(),
+  experience: z.boolean(),
+  projects: z.boolean(),
+  achievements: z.boolean(),
+  education: z.boolean(),
+  languages: z.boolean(),
+  hobbies: z.boolean(),
+});
+
+const promptTemplateSettingSchema = z.object({
+  label: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(240),
+  defaultTemplate: z.string().trim().min(1),
+  customTemplate: z.string().default(''),
+  activeMode: z.enum(['default', 'custom']),
+});
 
 export const userSettingsInputSchema = z.object({
   workspaceName: z.string().trim().min(1).max(120),
@@ -26,6 +46,33 @@ export const userSettingsInputSchema = z.object({
     allowAiReuse: z.boolean(),
     requireVerificationBeforeExport: z.boolean(),
   }),
+  resume: z.object({
+    formatting: z.object({
+      summaryMaxWords: z.number().int().min(10).max(80),
+      maxBulletsPerSection: z.number().int().min(1).max(10),
+      skillsSeparator: z.enum(['comma', 'bullet']),
+      linkStyle: z.enum(['compact', 'full']),
+      pageSize: z.enum(['A4', 'Letter']),
+      repeatSectionHeadingsOnNewPage: z.boolean(),
+      showPageNumbers: z.boolean(),
+    }),
+    structure: z.object({
+      sectionOrder: z.array(z.enum(['summary', 'skills', 'experience', 'projects', 'achievements', 'education', 'languages', 'hobbies'])).min(5).max(8),
+      defaultSectionVisibility: sectionVisibilitySchema,
+      maxProjects: z.number().int().min(1).max(8),
+      maxEducationItems: z.number().int().min(1).max(6),
+    }),
+    prompts: z.object({
+      jdParsing: promptTemplateSettingSchema,
+      candidateEvidence: promptTemplateSettingSchema,
+      relevanceMapping: promptTemplateSettingSchema,
+      experienceRewrite: promptTemplateSettingSchema,
+      summaryGeneration: promptTemplateSettingSchema,
+      atsEvaluation: promptTemplateSettingSchema,
+      finalAssembly: promptTemplateSettingSchema,
+      coverLetter: promptTemplateSettingSchema,
+    }),
+  }),
 });
 
 type SettingsRow = {
@@ -43,6 +90,9 @@ type SettingsRow = {
   privacy_keep_resume_history: boolean;
   privacy_allow_ai_reuse: boolean;
   privacy_require_verification: boolean;
+  resume_preferences: string;
+  resume_structure: string;
+  resume_prompt_templates: string;
 };
 
 function getDefaultSettings() {
@@ -67,11 +117,42 @@ function getDefaultSettings() {
       allowAiReuse: true,
       requireVerificationBeforeExport: false,
     },
+    resume: {
+      formatting: {
+        summaryMaxWords: 25,
+        maxBulletsPerSection: 5,
+        skillsSeparator: 'comma' as const,
+        linkStyle: 'compact' as const,
+        pageSize: 'A4' as const,
+        repeatSectionHeadingsOnNewPage: true,
+        showPageNumbers: true,
+      },
+      structure: {
+        sectionOrder: ['summary', 'skills', 'experience', 'projects', 'achievements', 'education', 'languages', 'hobbies'] as const,
+        defaultSectionVisibility: {
+          summary: true,
+          skills: true,
+          experience: true,
+          projects: true,
+          achievements: true,
+          education: true,
+          languages: true,
+          hobbies: true,
+        },
+        maxProjects: 4,
+        maxEducationItems: 3,
+      },
+      prompts: buildDefaultPromptTemplates(),
+    },
   };
 }
 
 function mapSettingsRow(row?: Partial<SettingsRow> | null) {
   const defaults = getDefaultSettings();
+  const resumeFormatting = (row?.resume_preferences as any) || {};
+  const resumeStructure = (row?.resume_structure as any) || {};
+  const resumePromptTemplates = (row?.resume_prompt_templates as any) || {};
+
   return {
     workspaceName: row?.workspace_name ?? defaults.workspaceName,
     defaultSourcePlatform: row?.default_source_platform ?? defaults.defaultSourcePlatform,
@@ -93,6 +174,40 @@ function mapSettingsRow(row?: Partial<SettingsRow> | null) {
       allowAiReuse: row?.privacy_allow_ai_reuse ?? defaults.privacy.allowAiReuse,
       requireVerificationBeforeExport: row?.privacy_require_verification ?? defaults.privacy.requireVerificationBeforeExport,
     },
+    resume: {
+      formatting: {
+        summaryMaxWords: resumeFormatting.summaryMaxWords ?? defaults.resume.formatting.summaryMaxWords,
+        maxBulletsPerSection: resumeFormatting.maxBulletsPerSection ?? defaults.resume.formatting.maxBulletsPerSection,
+        skillsSeparator: resumeFormatting.skillsSeparator ?? defaults.resume.formatting.skillsSeparator,
+        linkStyle: resumeFormatting.linkStyle ?? defaults.resume.formatting.linkStyle,
+        pageSize: resumeFormatting.pageSize ?? defaults.resume.formatting.pageSize,
+        repeatSectionHeadingsOnNewPage:
+          resumeFormatting.repeatSectionHeadingsOnNewPage ?? defaults.resume.formatting.repeatSectionHeadingsOnNewPage,
+        showPageNumbers: resumeFormatting.showPageNumbers ?? defaults.resume.formatting.showPageNumbers,
+      },
+      structure: {
+        sectionOrder: resumeStructure.sectionOrder ?? defaults.resume.structure.sectionOrder,
+        defaultSectionVisibility: {
+          ...defaults.resume.structure.defaultSectionVisibility,
+          ...(resumeStructure.defaultSectionVisibility || {}),
+        },
+        maxProjects: resumeStructure.maxProjects ?? defaults.resume.structure.maxProjects,
+        maxEducationItems: resumeStructure.maxEducationItems ?? defaults.resume.structure.maxEducationItems,
+      },
+      prompts: {
+        ...defaults.resume.prompts,
+        ...Object.fromEntries(
+          Object.entries(defaults.resume.prompts).map(([key, value]) => [
+            key,
+            {
+              ...value,
+              ...(resumePromptTemplates[key] || {}),
+              defaultTemplate: resumePromptTemplates[key]?.defaultTemplate || value.defaultTemplate,
+            },
+          ])
+        ),
+      },
+    },
   };
 }
 
@@ -103,9 +218,10 @@ async function ensureSettingsRow(userId: string) {
        user_id, workspace_name, default_source_platform, default_region, verification_requirement,
        notifications_product_updates, notifications_resume_ready, notifications_ats_alerts, notifications_verification_alerts,
        exports_default_template, exports_file_style, exports_include_cover_letter,
-       privacy_keep_resume_history, privacy_allow_ai_reuse, privacy_require_verification
+       privacy_keep_resume_history, privacy_allow_ai_reuse, privacy_require_verification,
+       resume_preferences, resume_structure, resume_prompt_templates
      )
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
      ON CONFLICT(user_id) DO NOTHING`,
     [
       userId,
@@ -123,6 +239,9 @@ async function ensureSettingsRow(userId: string) {
       defaults.privacy.keepResumeHistory,
       defaults.privacy.allowAiReuse,
       defaults.privacy.requireVerificationBeforeExport,
+      JSON.stringify(defaults.resume.formatting),
+      JSON.stringify(defaults.resume.structure),
+      JSON.stringify(defaults.resume.prompts),
     ]
   );
 }
@@ -135,7 +254,8 @@ export async function getUserSettings(userId: string) {
     `SELECT workspace_name, default_source_platform, default_region, verification_requirement,
             notifications_product_updates, notifications_resume_ready, notifications_ats_alerts, notifications_verification_alerts,
             exports_default_template, exports_file_style, exports_include_cover_letter,
-            privacy_keep_resume_history, privacy_allow_ai_reuse, privacy_require_verification
+            privacy_keep_resume_history, privacy_allow_ai_reuse, privacy_require_verification,
+            resume_preferences, resume_structure, resume_prompt_templates
      FROM user_settings
      WHERE user_id=$1`,
     [userId]
@@ -150,9 +270,10 @@ export async function upsertUserSettings(userId: string, input: z.infer<typeof u
        user_id, workspace_name, default_source_platform, default_region, verification_requirement,
        notifications_product_updates, notifications_resume_ready, notifications_ats_alerts, notifications_verification_alerts,
        exports_default_template, exports_file_style, exports_include_cover_letter,
-       privacy_keep_resume_history, privacy_allow_ai_reuse, privacy_require_verification
+       privacy_keep_resume_history, privacy_allow_ai_reuse, privacy_require_verification,
+       resume_preferences, resume_structure, resume_prompt_templates
      )
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
      ON CONFLICT(user_id) DO UPDATE SET
        workspace_name=excluded.workspace_name,
        default_source_platform=excluded.default_source_platform,
@@ -168,6 +289,9 @@ export async function upsertUserSettings(userId: string, input: z.infer<typeof u
        privacy_keep_resume_history=excluded.privacy_keep_resume_history,
        privacy_allow_ai_reuse=excluded.privacy_allow_ai_reuse,
        privacy_require_verification=excluded.privacy_require_verification,
+       resume_preferences=excluded.resume_preferences,
+       resume_structure=excluded.resume_structure,
+       resume_prompt_templates=excluded.resume_prompt_templates,
        updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
     [
       userId,
@@ -185,6 +309,9 @@ export async function upsertUserSettings(userId: string, input: z.infer<typeof u
       input.privacy.keepResumeHistory,
       input.privacy.allowAiReuse,
       input.privacy.requireVerificationBeforeExport,
+      JSON.stringify(input.resume.formatting),
+      JSON.stringify(input.resume.structure),
+      JSON.stringify(input.resume.prompts),
     ]
   );
 

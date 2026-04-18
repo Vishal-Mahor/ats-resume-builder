@@ -1,4 +1,81 @@
-export const JD_PARSING_PROMPT = (jd: string) => `
+import type { ResumePromptSection, ResumePromptTemplateSetting } from '@/lib/api';
+
+type PromptTemplateContext = Record<string, string>;
+
+export const DEFAULT_PROMPT_TEMPLATE_METADATA: Record<
+  ResumePromptSection,
+  { label: string; description: string }
+> = {
+  jdParsing: {
+    label: 'JD parsing',
+    description: 'Parses the job description into structured hiring requirements.',
+  },
+  candidateEvidence: {
+    label: 'Candidate evidence',
+    description: 'Extracts grounded evidence units from the candidate profile.',
+  },
+  relevanceMapping: {
+    label: 'Relevance mapping',
+    description: 'Maps job requirements to supported candidate evidence.',
+  },
+  experienceRewrite: {
+    label: 'Experience rewrite',
+    description: 'Rewrites experience and project bullets using only grounded evidence.',
+  },
+  summaryGeneration: {
+    label: 'Summary generation',
+    description: 'Generates the short ATS-friendly professional summary.',
+  },
+  atsEvaluation: {
+    label: 'ATS evaluation',
+    description: 'Evaluates ATS coverage, evidence quality, and improvement gaps.',
+  },
+  finalAssembly: {
+    label: 'Final assembly',
+    description: 'Sets ordering and assembly guidance for the final resume package.',
+  },
+  coverLetter: {
+    label: 'Cover letter',
+    description: 'Writes the evidence-backed cover letter.',
+  },
+};
+
+function interpolatePromptTemplate(template: string, context: PromptTemplateContext) {
+  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => context[key] ?? '');
+}
+
+export function resolvePromptTemplate(
+  section: ResumePromptSection,
+  context: PromptTemplateContext,
+  promptSetting?: Pick<ResumePromptTemplateSetting, 'activeMode' | 'customTemplate' | 'defaultTemplate'>
+) {
+  const baseTemplate =
+    promptSetting?.activeMode === 'custom' && promptSetting.customTemplate.trim().length > 0
+      ? promptSetting.customTemplate
+      : promptSetting?.defaultTemplate?.trim().length
+        ? promptSetting.defaultTemplate
+        : DEFAULT_PROMPT_TEMPLATES[section];
+
+  return interpolatePromptTemplate(baseTemplate, context);
+}
+
+export function buildDefaultPromptTemplates(): Record<ResumePromptSection, ResumePromptTemplateSetting> {
+  return (Object.keys(DEFAULT_PROMPT_TEMPLATES) as ResumePromptSection[]).reduce(
+    (acc, section) => {
+      acc[section] = {
+        ...DEFAULT_PROMPT_TEMPLATE_METADATA[section],
+        defaultTemplate: DEFAULT_PROMPT_TEMPLATES[section],
+        customTemplate: '',
+        activeMode: 'default',
+      };
+      return acc;
+    },
+    {} as Record<ResumePromptSection, ResumePromptTemplateSetting>
+  );
+}
+
+export const DEFAULT_PROMPT_TEMPLATES: Record<ResumePromptSection, string> = {
+  jdParsing: `
 You are a truthful job-description parser for an ATS resume-tailoring system.
 
 Your job is to extract hiring requirements faithfully from the job description.
@@ -51,11 +128,11 @@ Rules:
 
 Job description:
 <job_description>
-${jd}
+{{job_description}}
 </job_description>
-`;
+`,
 
-export const CANDIDATE_EVIDENCE_PROMPT = (candidateSnapshot: object) => `
+  candidateEvidence: `
 You are an evidence extractor for a truthful resume-tailoring system.
 
 Extract only atomic evidence units explicitly supported by the candidate data.
@@ -91,11 +168,11 @@ Rules:
 
 Candidate snapshot:
 <candidate_snapshot>
-${JSON.stringify(candidateSnapshot, null, 2)}
+{{candidate_snapshot}}
 </candidate_snapshot>
-`;
+`,
 
-export const RELEVANCE_MAPPING_PROMPT = (jdParse: object, candidateEvidence: object) => `
+  relevanceMapping: `
 You are a requirement-to-evidence mapper for truthful resume tailoring.
 
 Match each job requirement to the candidate evidence.
@@ -123,23 +200,17 @@ Return ONLY valid JSON:
 
 Job parse:
 <job_parse>
-${JSON.stringify(jdParse, null, 2)}
+{{job_parse}}
 </job_parse>
 
 Candidate evidence:
 <candidate_evidence>
-${JSON.stringify(candidateEvidence, null, 2)}
+{{candidate_evidence}}
 </candidate_evidence>
-`;
+`,
 
-export const BULLET_REWRITE_PROMPT = (input: {
-  companyName: string;
-  jobTitle: string;
-  jdParse: object;
-  mappings: object;
-  candidateSnapshot: object;
-}) => `
-You rewrite resume bullets truthfully for ${input.jobTitle} at ${input.companyName}.
+  experienceRewrite: `
+You rewrite resume bullets truthfully for {{job_title}} at {{company_name}}.
 
 Use ONLY supplied candidate records and mapped evidence.
 Do NOT introduce:
@@ -184,32 +255,26 @@ Rules:
 
 Inputs:
 <job_parse>
-${JSON.stringify(input.jdParse, null, 2)}
+{{job_parse}}
 </job_parse>
 
 <mappings>
-${JSON.stringify(input.mappings, null, 2)}
+{{mappings}}
 </mappings>
 
 <candidate_snapshot>
-${JSON.stringify(input.candidateSnapshot, null, 2)}
+{{candidate_snapshot}}
 </candidate_snapshot>
-`;
+`,
 
-export const SUMMARY_GENERATION_PROMPT = (input: {
-  companyName: string;
-  jobTitle: string;
-  jdParse: object;
-  mappings: object;
-  candidateEvidence: object;
-}) => `
+  summaryGeneration: `
 You write concise, evidence-backed resume summaries for ATS and recruiters.
 
-Write a compact summary for ${input.jobTitle} at ${input.companyName}.
+Write a compact summary for {{job_title}} at {{company_name}}.
 Use only supported evidence.
 Avoid generic filler like "results-driven", "dynamic", or "hardworking" unless grounded by specifics.
 Cap the summary to high-signal content only:
-- max 3-5 lines (or about 110 words)
+- max 25 words
 - role-aligned keywords naturally included
 - years of experience, core domain, strongest capabilities, and 1-2 high-impact strengths
 
@@ -223,24 +288,19 @@ Return ONLY valid JSON:
 
 Inputs:
 <job_parse>
-${JSON.stringify(input.jdParse, null, 2)}
+{{job_parse}}
 </job_parse>
 
 <mappings>
-${JSON.stringify(input.mappings, null, 2)}
+{{mappings}}
 </mappings>
 
 <candidate_evidence>
-${JSON.stringify(input.candidateEvidence, null, 2)}
+{{candidate_evidence}}
 </candidate_evidence>
-`;
+`,
 
-export const ATS_EVALUATION_PROMPT = (input: {
-  jdParse: object;
-  candidateEvidence: object;
-  mappings: object;
-  finalResume: object;
-}) => `
+  atsEvaluation: `
 You are an ATS evaluator for a truthful resume-tailoring system.
 
 Score based on:
@@ -277,31 +337,24 @@ Return ONLY valid JSON:
 
 Inputs:
 <job_parse>
-${JSON.stringify(input.jdParse, null, 2)}
+{{job_parse}}
 </job_parse>
 
 <candidate_evidence>
-${JSON.stringify(input.candidateEvidence, null, 2)}
+{{candidate_evidence}}
 </candidate_evidence>
 
 <mappings>
-${JSON.stringify(input.mappings, null, 2)}
+{{mappings}}
 </mappings>
 
 <final_resume>
-${JSON.stringify(input.finalResume, null, 2)}
+{{final_resume}}
 </final_resume>
-`;
+`,
 
-export const FINAL_ASSEMBLY_PROMPT = (input: {
-  companyName: string;
-  jobTitle: string;
-  summary: object;
-  skills: object;
-  rewrittenSections: object;
-  candidateSnapshot: object;
-}) => `
-You assemble a final resume package for ${input.jobTitle} at ${input.companyName}.
+  finalAssembly: `
+You assemble a final resume package for {{job_title}} at {{company_name}}.
 
 Do not add any new facts.
 Do not modify the meaning of validated bullets.
@@ -315,61 +368,184 @@ Return ONLY valid JSON:
 
 Inputs:
 <summary>
-${JSON.stringify(input.summary, null, 2)}
+{{summary}}
 </summary>
 
 <skills>
-${JSON.stringify(input.skills, null, 2)}
+{{skills}}
 </skills>
 
 <rewritten_sections>
-${JSON.stringify(input.rewrittenSections, null, 2)}
+{{rewritten_sections}}
 </rewritten_sections>
 
 <candidate_snapshot>
-${JSON.stringify(input.candidateSnapshot, null, 2)}
+{{candidate_snapshot}}
 </candidate_snapshot>
-`;
+`,
 
-export const COVER_LETTER_PROMPT = (input: {
-  companyName: string;
-  jobTitle: string;
-  tone: 'formal' | 'modern' | 'aggressive';
-  jdParse: object;
-  mappings: object;
-  finalResume: object;
-  candidateEvidence: object;
-}) => `
+  coverLetter: `
 You are an expert cover letter writer.
 
-Write a personalized cover letter for ${input.jobTitle} at ${input.companyName}.
+Write a personalized cover letter for {{job_title}} at {{company_name}}.
 Use only supported evidence from the candidate profile and final tailored resume.
 Do not introduce new metrics, tools, or experiences.
 
-Tone: ${input.tone}
+Tone: {{tone}}
 
 Rules:
 1. Maximum 3 paragraphs.
 2. Paragraph 1: role fit and motivation.
 3. Paragraph 2: 2-3 evidence-backed highlights relevant to the role.
-4. Paragraph 3: specific close for ${input.companyName}.
+4. Paragraph 3: specific close for {{company_name}}.
 5. 180-260 words.
 6. No markdown. No subject line.
 
 Inputs:
 <job_parse>
-${JSON.stringify(input.jdParse, null, 2)}
+{{job_parse}}
 </job_parse>
 
 <mappings>
-${JSON.stringify(input.mappings, null, 2)}
+{{mappings}}
 </mappings>
 
 <final_resume>
-${JSON.stringify(input.finalResume, null, 2)}
+{{final_resume}}
 </final_resume>
 
 <candidate_evidence>
-${JSON.stringify(input.candidateEvidence, null, 2)}
+{{candidate_evidence}}
 </candidate_evidence>
-`;
+`,
+};
+
+export const JD_PARSING_PROMPT = (jd: string, promptSetting?: Pick<ResumePromptTemplateSetting, 'activeMode' | 'customTemplate' | 'defaultTemplate'>) =>
+  resolvePromptTemplate('jdParsing', { job_description: jd }, promptSetting);
+
+export const CANDIDATE_EVIDENCE_PROMPT = (candidateSnapshot: object, promptSetting?: Pick<ResumePromptTemplateSetting, 'activeMode' | 'customTemplate' | 'defaultTemplate'>) =>
+  resolvePromptTemplate('candidateEvidence', { candidate_snapshot: JSON.stringify(candidateSnapshot, null, 2) }, promptSetting);
+
+export const RELEVANCE_MAPPING_PROMPT = (jdParse: object, candidateEvidence: object, promptSetting?: Pick<ResumePromptTemplateSetting, 'activeMode' | 'customTemplate' | 'defaultTemplate'>) =>
+  resolvePromptTemplate(
+    'relevanceMapping',
+    {
+      job_parse: JSON.stringify(jdParse, null, 2),
+      candidate_evidence: JSON.stringify(candidateEvidence, null, 2),
+    },
+    promptSetting
+  );
+
+export const BULLET_REWRITE_PROMPT = (
+  input: {
+    companyName: string;
+    jobTitle: string;
+    jdParse: object;
+    mappings: object;
+    candidateSnapshot: object;
+  },
+  promptSetting?: Pick<ResumePromptTemplateSetting, 'activeMode' | 'customTemplate' | 'defaultTemplate'>
+) =>
+  resolvePromptTemplate(
+    'experienceRewrite',
+    {
+      company_name: input.companyName,
+      job_title: input.jobTitle,
+      job_parse: JSON.stringify(input.jdParse, null, 2),
+      mappings: JSON.stringify(input.mappings, null, 2),
+      candidate_snapshot: JSON.stringify(input.candidateSnapshot, null, 2),
+    },
+    promptSetting
+  );
+
+export const SUMMARY_GENERATION_PROMPT = (
+  input: {
+    companyName: string;
+    jobTitle: string;
+    jdParse: object;
+    mappings: object;
+    candidateEvidence: object;
+  },
+  promptSetting?: Pick<ResumePromptTemplateSetting, 'activeMode' | 'customTemplate' | 'defaultTemplate'>
+) =>
+  resolvePromptTemplate(
+    'summaryGeneration',
+    {
+      company_name: input.companyName,
+      job_title: input.jobTitle,
+      job_parse: JSON.stringify(input.jdParse, null, 2),
+      mappings: JSON.stringify(input.mappings, null, 2),
+      candidate_evidence: JSON.stringify(input.candidateEvidence, null, 2),
+    },
+    promptSetting
+  );
+
+export const ATS_EVALUATION_PROMPT = (
+  input: {
+    jdParse: object;
+    candidateEvidence: object;
+    mappings: object;
+    finalResume: object;
+  },
+  promptSetting?: Pick<ResumePromptTemplateSetting, 'activeMode' | 'customTemplate' | 'defaultTemplate'>
+) =>
+  resolvePromptTemplate(
+    'atsEvaluation',
+    {
+      job_parse: JSON.stringify(input.jdParse, null, 2),
+      candidate_evidence: JSON.stringify(input.candidateEvidence, null, 2),
+      mappings: JSON.stringify(input.mappings, null, 2),
+      final_resume: JSON.stringify(input.finalResume, null, 2),
+    },
+    promptSetting
+  );
+
+export const FINAL_ASSEMBLY_PROMPT = (
+  input: {
+    companyName: string;
+    jobTitle: string;
+    summary: object;
+    skills: object;
+    rewrittenSections: object;
+    candidateSnapshot: object;
+  },
+  promptSetting?: Pick<ResumePromptTemplateSetting, 'activeMode' | 'customTemplate' | 'defaultTemplate'>
+) =>
+  resolvePromptTemplate(
+    'finalAssembly',
+    {
+      company_name: input.companyName,
+      job_title: input.jobTitle,
+      summary: JSON.stringify(input.summary, null, 2),
+      skills: JSON.stringify(input.skills, null, 2),
+      rewritten_sections: JSON.stringify(input.rewrittenSections, null, 2),
+      candidate_snapshot: JSON.stringify(input.candidateSnapshot, null, 2),
+    },
+    promptSetting
+  );
+
+export const COVER_LETTER_PROMPT = (
+  input: {
+    companyName: string;
+    jobTitle: string;
+    tone: 'formal' | 'modern' | 'aggressive';
+    jdParse: object;
+    mappings: object;
+    finalResume: object;
+    candidateEvidence: object;
+  },
+  promptSetting?: Pick<ResumePromptTemplateSetting, 'activeMode' | 'customTemplate' | 'defaultTemplate'>
+) =>
+  resolvePromptTemplate(
+    'coverLetter',
+    {
+      company_name: input.companyName,
+      job_title: input.jobTitle,
+      tone: input.tone,
+      job_parse: JSON.stringify(input.jdParse, null, 2),
+      mappings: JSON.stringify(input.mappings, null, 2),
+      final_resume: JSON.stringify(input.finalResume, null, 2),
+      candidate_evidence: JSON.stringify(input.candidateEvidence, null, 2),
+    },
+    promptSetting
+  );

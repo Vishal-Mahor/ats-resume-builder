@@ -15,10 +15,14 @@ const JSON_COLUMNS = new Set([
   'languages',
   'strengths',
   'resume_content',
+  'analysis_snapshot',
   'matched_keywords',
   'missing_keywords',
   'suggestions',
   'metadata',
+  'resume_preferences',
+  'resume_structure',
+  'resume_prompt_templates',
 ]);
 
 const BOOLEAN_COLUMNS = new Set(['is_current', 'is_read']);
@@ -31,6 +35,8 @@ const BOOLEAN_COLUMNS = new Set(['is_current', 'is_read']);
   'privacy_keep_resume_history',
   'privacy_allow_ai_reuse',
   'privacy_require_verification',
+  'resume_repeat_section_headings',
+  'resume_show_page_numbers',
 ].forEach((column) => BOOLEAN_COLUMNS.add(column));
 
 let client: Client | null = null;
@@ -80,6 +86,9 @@ async function ensureOptionalColumns(currentClient: Client) {
        privacy_keep_resume_history INTEGER NOT NULL DEFAULT 1,
        privacy_allow_ai_reuse INTEGER NOT NULL DEFAULT 1,
        privacy_require_verification INTEGER NOT NULL DEFAULT 0,
+       resume_preferences TEXT NOT NULL DEFAULT '{}',
+       resume_structure TEXT NOT NULL DEFAULT '{}',
+       resume_prompt_templates TEXT NOT NULL DEFAULT '{}',
        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
        UNIQUE(user_id)
@@ -143,6 +152,10 @@ async function ensureOptionalColumns(currentClient: Client) {
     `ALTER TABLE profiles ADD COLUMN hobbies TEXT NOT NULL DEFAULT '[]'`,
     `ALTER TABLE resumes ADD COLUMN source_platform TEXT NOT NULL DEFAULT 'manual'`,
     `ALTER TABLE resumes ADD COLUMN template_id TEXT REFERENCES resume_templates(id)`,
+    `ALTER TABLE resumes ADD COLUMN analysis_snapshot TEXT DEFAULT '{}'`,
+    `ALTER TABLE user_settings ADD COLUMN resume_preferences TEXT NOT NULL DEFAULT '{}'`,
+    `ALTER TABLE user_settings ADD COLUMN resume_structure TEXT NOT NULL DEFAULT '{}'`,
+    `ALTER TABLE user_settings ADD COLUMN resume_prompt_templates TEXT NOT NULL DEFAULT '{}'`,
   ];
 
   for (const statement of migrationStatements) {
