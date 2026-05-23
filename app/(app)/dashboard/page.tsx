@@ -29,6 +29,10 @@ export default function DashboardPage() {
     () => getProgressColor(readinessPercent),
     [readinessPercent]
   );
+  const applicationStrategy = useMemo(
+    () => getApplicationStrategy(summary?.atsInsights.averageKeywordMatch ?? 0, recommendationCount),
+    [recommendationCount, summary?.atsInsights.averageKeywordMatch]
+  );
 
   if (loading) {
     return (
@@ -47,7 +51,7 @@ export default function DashboardPage() {
           Dashboard unavailable
         </h2>
         <p className="app-body mt-2 max-w-xl">
-          We couldn’t load your dashboard right now. Try again in a moment and your latest ATS insights should appear.
+          We couldn’t load your workspace right now. Try again in a moment and your latest job-search signals should appear.
         </p>
       </section>
     );
@@ -55,24 +59,24 @@ export default function DashboardPage() {
 
   const overviewCards = [
     {
-      label: 'Templates available',
-      value: summary.templateCount,
-      helper: 'Ready-to-use ATS-friendly layouts',
+      label: 'Evidence coverage',
+      value: `${summary.atsInsights.averageKeywordMatch}%`,
+      helper: 'How much target-role evidence is currently covered',
     },
     {
-      label: 'Resumes created',
+      label: 'Application assets',
       value: summary.stats[0]?.value ?? 0,
-      helper: 'Generated drafts in this workspace',
+      helper: 'Prepared role-specific resume packages',
     },
     {
-      label: 'Workspaces',
+      label: 'Job-search focus',
       value: WORKSPACE_COUNT,
-      helper: 'Current active resume workspace',
+      helper: 'One active workspace for target roles',
     },
     {
-      label: 'Companies targeted',
+      label: 'Target companies',
       value: summary.stats[2]?.value ?? 0,
-      helper: 'Distinct companies across your drafts',
+      helper: 'Distinct companies or roles pursued',
     },
   ];
 
@@ -81,13 +85,27 @@ export default function DashboardPage() {
         <section className="app-panel-strong overflow-hidden p-6 sm:p-8">
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div className="max-w-3xl">
-              <div className="app-badge">Dashboard overview</div>
+              <div className="app-badge">Job-search cockpit</div>
               <h2 className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-[var(--text-primary)] sm:text-5xl">
-                Your resume workspace at a glance
+                Optimize for interviews, not perfect resumes
               </h2>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--text-secondary)]">
-                Use this dashboard to see your templates, generated resumes, profile readiness, ATS movement, and the main pages available in the workspace.
+                Track whether your profile, evidence, and application assets are strong enough for real roles. ATS fit is one signal inside a broader job-winning strategy.
               </p>
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                {[
+                  ['1', 'Evaluate role fit'],
+                  ['2', 'Close evidence gaps'],
+                  ['3', 'Apply with follow-up'],
+                ].map(([step, label]) => (
+                  <div key={label} className="app-panel-muted flex items-center gap-3 px-4 py-3">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-semibold text-[var(--accent-strong)]">
+                      {step}
+                    </span>
+                    <span className="text-sm font-medium text-[var(--text-secondary)]">{label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="app-panel-muted min-w-[260px] p-5">
@@ -127,14 +145,11 @@ export default function DashboardPage() {
           <article className="app-panel p-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <div className="app-eyebrow">Analytics</div>
+                <div className="app-eyebrow">Readiness signals</div>
                 <h3 className="app-subheading mt-2">
-                  ATS performance summary
+                  Application performance summary
                 </h3>
               </div>
-              <Link href="/analytics" className="text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--text-primary)]">
-                Open analytics
-              </Link>
             </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -152,44 +167,19 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-
-            <div className="mt-6">
-              <div className="text-sm font-semibold text-[var(--text-primary)]">Recent score trend</div>
-              <div className="mt-4 grid gap-4 md:grid-cols-6">
-                {summary.trend.length > 0 ? (
-                  summary.trend.map((point) => (
-                    <div key={point.label} className="app-panel-muted p-4">
-                      <div className="flex h-32 items-end justify-center rounded-[14px] px-4 pb-4" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                        <div
-                          className="w-full rounded-full"
-                          style={{ background: 'var(--accent)', height: `${Math.max(point.score, 12)}%` }}
-                        />
-                      </div>
-                      <div className="mt-3 text-sm font-semibold text-[var(--text-primary)]">{point.score}%</div>
-                      <div className="text-xs uppercase tracking-[0.22em] text-[var(--text-dim)]">{point.label}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="app-panel-muted p-6 text-sm text-[var(--text-secondary)] md:col-span-6">
-                    Generate a few resumes and your ATS score trend will appear here.
-                  </div>
-                )}
-              </div>
-            </div>
           </article>
 
           <div className="space-y-6">
             <article className="app-panel p-6">
-              <div className="app-eyebrow">Workspace details</div>
+              <div className="app-eyebrow">Job-search snapshot</div>
               <h3 className="app-subheading mt-2">
-                User and content snapshot
+                Current operating picture
               </h3>
               <div className="mt-5 space-y-3">
                 {[
-                  ['Templates available', `${summary.templateCount}`],
-                  ['Resumes created', `${summary.stats[0]?.value ?? 0}`],
-                  ['Average keyword match', `${summary.atsInsights.averageKeywordMatch}%`],
-                  ['Priority recommendations', `${recommendationCount}`],
+                  ['Application assets', `${summary.stats[0]?.value ?? 0}`],
+                  ['Evidence coverage', `${summary.atsInsights.averageKeywordMatch}%`],
+                  ['Priority interventions', `${recommendationCount}`],
                 ].map(([label, value]) => (
                   <div key={label} className="app-panel-muted flex items-center justify-between gap-4 px-4 py-3">
                     <div className="text-sm text-[var(--text-secondary)]">{label}</div>
@@ -200,9 +190,9 @@ export default function DashboardPage() {
             </article>
 
             <article className="app-panel p-6">
-              <div className="app-eyebrow">Missing keywords</div>
+              <div className="app-eyebrow">Evidence gaps</div>
               <h3 className="app-subheading mt-2">
-                Most common ATS gaps
+                Repeated proof points to strengthen
               </h3>
               <div className="mt-4 flex flex-wrap gap-2">
                 {summary.atsInsights.topMissingKeywords.length > 0 ? (
@@ -218,9 +208,27 @@ export default function DashboardPage() {
             </article>
 
             <article className="app-panel-strong p-6">
+              <div className="app-eyebrow">Application strategy</div>
+              <h3 className="app-subheading mt-2">
+                {applicationStrategy.title}
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
+                {applicationStrategy.body}
+              </p>
+              <div className="mt-5 grid gap-3">
+                {summary.quickActions.slice(0, 3).map((action) => (
+                  <Link key={action.id} href={action.href} className="app-panel-muted block px-4 py-3 transition hover:bg-[var(--bg-hover)]">
+                    <div className="text-sm font-semibold text-[var(--text-primary)]">{action.title}</div>
+                    <div className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{action.description}</div>
+                  </Link>
+                ))}
+              </div>
+            </article>
+
+            <article className="app-panel-strong p-6">
               <div className="app-eyebrow">Next steps</div>
               <h3 className="app-subheading mt-2">
-                Suggested actions
+                Highest-leverage actions
               </h3>
               <div className="mt-5 space-y-3">
                 {nextSteps.length > 0 ? (
@@ -264,4 +272,25 @@ function getProgressColor(progress: number) {
 
 function clampProgress(progress: number) {
   return Math.min(100, Math.max(0, Number.isFinite(progress) ? progress : 0));
+}
+
+function getApplicationStrategy(evidenceCoverage: number, recommendationCount: number) {
+  if (evidenceCoverage >= 80 && recommendationCount <= 1) {
+    return {
+      title: 'Apply now, then follow up',
+      body: 'Your current materials look strong enough to move. Spend the next effort on recruiter outreach, referral asks, and a clean follow-up plan.',
+    };
+  }
+
+  if (evidenceCoverage >= 55) {
+    return {
+      title: 'Improve positioning before applying',
+      body: 'You have a workable base, but a few missing proof points may limit callbacks. Strengthen the evidence, then generate the final resume.',
+    };
+  }
+
+  return {
+    title: 'Strengthen your profile first',
+    body: 'This is not just a resume formatting problem. Add stronger projects, measurable achievements, and role-specific evidence before applying broadly.',
+  };
 }

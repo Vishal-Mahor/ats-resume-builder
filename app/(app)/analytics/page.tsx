@@ -19,18 +19,18 @@ export default function AnalyticsPage() {
       <section className="app-panel p-6">
         <div className="app-eyebrow">Analytics</div>
         <h2 className="app-heading mt-2">
-          Review ATS performance over time
+          Review job-search readiness over time
         </h2>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
         <article className="app-panel p-6">
           <h3 className="app-subheading">
-            ATS score trend
+            Interview readiness trend
           </h3>
           <div className="mt-6 grid gap-4 sm:grid-cols-5">
-            {summary?.trend?.length ? summary.trend.map((point) => (
-              <div key={point.label} className="app-panel-muted p-4">
+            {summary?.trend?.length ? summary.trend.map((point, index) => (
+              <div key={`${point.label}-${index}`} className="app-panel-muted p-4">
                 <div className="flex h-36 items-end justify-center rounded-[1.25rem] px-4 pb-4" style={{ background: 'rgba(255,255,255,0.02)' }}>
                   <div className="w-full rounded-full" style={{ background: 'var(--accent)', height: `${Math.max(point.score, 12)}%` }} />
                 </div>
@@ -43,7 +43,7 @@ export default function AnalyticsPage() {
 
         <article className="app-panel p-6">
           <h3 className="app-subheading">
-            Keyword improvement opportunities
+            Evidence improvement opportunities
           </h3>
           <div className="mt-5 flex flex-wrap gap-2">
             {summary?.atsInsights.topMissingKeywords?.length ? summary.atsInsights.topMissingKeywords.map((keyword) => (

@@ -143,6 +143,16 @@ export const api = {
         body: JSON.stringify({ email, code }),
       }),
     me: () => request<User>('/api/auth/me'),
+    changePassword: (password: string) =>
+      request<{ success: boolean }>('/api/auth/password', {
+        method: 'PUT',
+        body: JSON.stringify({ password }),
+      }),
+    deleteAccount: (confirmation: string) =>
+      request<{ success: boolean }>('/api/auth/account', {
+        method: 'DELETE',
+        body: JSON.stringify({ confirmation }),
+      }),
     logout: () => request<{ success: boolean }>('/api/auth/logout', { method: 'POST' }, false),
   },
 
@@ -213,6 +223,25 @@ export const api = {
       }),
   },
 
+  jobs: {
+    list: () => request<JobApplication[]>('/api/jobs'),
+    create: (data: CreateJobApplicationInput) =>
+      request<JobApplication>('/api/jobs', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateStatus: (input: { id: string; source: JobApplication['source']; status: string }) =>
+      request<JobApplication>('/api/jobs', {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    reorder: (items: Array<{ id: string; source: JobApplication['source']; sort_order: number }>) =>
+      request<{ success: boolean }>('/api/jobs', {
+        method: 'PATCH',
+        body: JSON.stringify({ items }),
+      }),
+  },
+
   // ─── Resumes ────────────────────────────────────────────
   resumes: {
     list:   () => request<ResumeSummary[]>('/api/resumes'),
@@ -250,7 +279,7 @@ export const api = {
 
 // ─── Types ────────────────────────────────────────────────
 export interface User {
-  id: string; email: string; name: string; avatar_url?: string; plan: string;
+  id: string; email: string; name: string; avatar_url?: string; plan: string; created_at?: string;
 }
 
 export interface FullProfile {
@@ -361,6 +390,7 @@ export interface Education {
 export interface ResumeSummary {
   id: string; company_name: string; job_title: string; ats_score: number;
   source_platform?: string; template_id?: string; status: string; created_at: string;
+  location?: string;
 }
 
 export interface ResumeStats {
@@ -374,6 +404,29 @@ export interface Resume extends ResumeSummary {
   matched_keywords: string[]; missing_keywords: string[];
   suggestions: Suggestion[];
   analysis_snapshot?: ResumeAnalysisSnapshot;
+}
+
+export interface JobApplication {
+  id: string;
+  resume_id?: string;
+  source: 'resume' | 'manual';
+  company_name: string;
+  job_title: string;
+  location?: string;
+  source_platform?: string;
+  status: string;
+  application_link?: string;
+  created_at: string;
+  sort_order?: number;
+}
+
+export interface CreateJobApplicationInput {
+  company_name: string;
+  job_title: string;
+  location?: string;
+  source_platform?: string;
+  status?: string;
+  application_link?: string;
 }
 
 export interface ResumeAnalysisSnapshot {

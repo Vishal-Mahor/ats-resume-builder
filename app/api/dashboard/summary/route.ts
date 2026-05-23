@@ -47,8 +47,8 @@ export async function GET(request: Request) {
     const currentAverage = average(currentBatch.map((resume) => resume.ats_score ?? 0));
     const previousAverage = average(previousBatch.map((resume) => resume.ats_score ?? 0));
     const avgDelta = previousBatch.length
-      ? `${formatSignedDelta(Math.round(currentAverage - previousAverage))} vs previous batch`
-      : 'Build your first ATS benchmark';
+      ? `${formatSignedDelta(Math.round(currentAverage - previousAverage))} readiness points vs previous batch`
+      : 'Build your first job-readiness baseline';
 
     const missingKeywords = countTopTerms(resumes.flatMap((resume) => resume.missing_keywords ?? []), 6);
     const matchedKeywords = resumes.reduce(
@@ -79,31 +79,31 @@ export async function GET(request: Request) {
 
     const stats = [
       {
-        label: 'Total Resumes Created',
+        label: 'Application Assets',
         value: resumes.length,
-        delta: resumes.length > 0 ? `+${Math.min(resumes.length, 5)} recent drafts` : 'Start your first role-targeted draft',
-        helper: 'All tailored resume versions saved',
+        delta: resumes.length > 0 ? `+${Math.min(resumes.length, 5)} recent role packages` : 'Start your first target role',
+        helper: 'Resumes and application drafts prepared',
         trend: 'up' as const,
       },
       {
-        label: 'Average ATS Score',
+        label: 'Avg Readiness',
         value: Math.round(currentAverage),
         delta: avgDelta,
-        helper: 'Across your latest tailored resumes',
+        helper: 'Across your latest target roles',
         trend: currentAverage >= previousAverage ? 'up' as const : 'down' as const,
       },
       {
         label: 'Jobs Targeted',
         value: new Set(resumes.map((resume) => resume.company_name)).size,
         delta: resumes.length > 0 ? `${countPlatforms(resumes)} source channels tracked` : 'LinkedIn, Indeed, Naukri, Manual',
-        helper: 'Distinct companies pursued',
+        helper: 'Distinct companies or roles pursued',
         trend: 'steady' as const,
       },
       {
-        label: 'Best ATS Match',
+        label: 'Strongest Fit',
         value: Math.max(0, ...resumes.map((resume) => resume.ats_score ?? 0)),
-        delta: missingKeywords.length > 0 ? `${missingKeywords[0]} is still a common gap` : 'No keyword gaps detected yet',
-        helper: 'Highest scoring resume so far',
+        delta: missingKeywords.length > 0 ? `${missingKeywords[0]} is still a common evidence gap` : 'No repeated gaps detected yet',
+        helper: 'Best role-readiness result so far',
         trend: 'up' as const,
       },
     ];
@@ -121,27 +121,27 @@ export async function GET(request: Request) {
       quickActions: [
         {
           id: 'paste-jd',
-          title: 'Paste a job description',
-          description: 'Analyze ATS keywords from LinkedIn, Naukri, Indeed, or manual briefs.',
+          title: 'Evaluate a target role',
+          description: 'Understand fit, risks, gaps, and whether to apply now or improve first.',
           href: '/jd-analysis',
         },
         {
           id: 'create-resume',
-          title: 'Create resume from profile',
-          description: 'Use your saved experience and skills to generate a tailored draft faster.',
+          title: 'Prepare application assets',
+          description: 'Generate a role-specific resume after you know the positioning strategy.',
           href: '/new-resume',
         },
         {
           id: 'history',
-          title: 'Review resume history',
-          description: 'Compare past ATS scores, statuses, and target companies in one place.',
+          title: 'Review target history',
+          description: 'Compare past roles, readiness, statuses, and companies in one place.',
           href: '/resume-history',
         },
         {
           id: 'profile',
-          title: 'Complete your profile',
-          description: 'Improve output quality by filling in contact details, achievements, and skills.',
-          href: '/profile',
+          title: 'Strengthen your account profile',
+          description: 'Add quantified achievements, projects, skills, and proof points.',
+          href: '/settings?tab=profile',
         },
       ],
       recentResumes,
@@ -235,13 +235,13 @@ function buildNextSteps(input: {
   const steps: string[] = [];
 
   if (input.resumesCount === 0) {
-    steps.push('Create your first targeted resume from a live job description.');
+    steps.push('Evaluate one real job description and decide whether to apply now, improve first, or skip.');
   }
   if (input.profileCompletion < 80) {
-    steps.push('Complete more of your profile so future resumes need less manual editing.');
+    steps.push('Complete more of your profile so the app can find stronger proof points for each role.');
   }
   if (input.missingKeywords.length > 0) {
-    steps.push(`Add missing keywords like ${input.missingKeywords.slice(0, 3).join(', ')} to improve ATS alignment.`);
+    steps.push(`Add real evidence for gaps like ${input.missingKeywords.slice(0, 3).join(', ')} before chasing a higher score.`);
   }
   if (input.recommendations.length > 0) {
     steps.push(input.recommendations[0].action);

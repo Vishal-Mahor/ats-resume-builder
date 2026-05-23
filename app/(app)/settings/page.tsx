@@ -1,19 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { CheckCircle2, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { api, type ResumeTemplate, type UserSettings } from '@/lib/api';
+import { BillingUsagePanel } from '@/components/billing/BillingUsagePanel';
+import { api, setAuthToken, type BillingSnapshot, type FullProfile, type User, type UserSettings } from '@/lib/api';
 
-type SettingsTab = 'general' | 'notifications' | 'exports' | 'privacy' | 'resume';
+type SettingsTab = 'profile' | 'billing' | 'notifications' | 'privacy';
+type VerificationChannel = 'email' | 'phone';
 
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; description: string }> = [
-  { id: 'general', label: 'General', description: 'Workspace identity and default behavior' },
-  { id: 'notifications', label: 'Notifications', description: 'Email and workflow alerts' },
-  { id: 'exports', label: 'Exports', description: 'PDF naming and template defaults' },
-  { id: 'privacy', label: 'Privacy', description: 'Data retention and verification status' },
-  { id: 'resume', label: 'Resume', description: 'Formatting, structure, and prompt templates' },
+  { id: 'profile', label: 'Profile', description: 'Account details' },
+  { id: 'billing', label: 'Billing', description: 'Plan and usage' },
+  { id: 'notifications', label: 'Notifications', description: 'Alerts' },
+  { id: 'privacy', label: 'Privacy', description: 'Data controls' },
 ];
 
 function createPromptDefaults() {
@@ -80,37 +82,51 @@ const DEFAULT_SETTINGS: UserSettings = {
 };
 
 export default function SettingsPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get('tab');
   const activeTab = useMemo<SettingsTab>(() => {
     if (requestedTab && SETTINGS_TABS.some((tab) => tab.id === requestedTab)) {
       return requestedTab as SettingsTab;
     }
-    return 'general';
+    return 'profile';
   }, [requestedTab]);
 
-  const [templates, setTemplates] = useState<ResumeTemplate[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<FullProfile | null>(null);
+  const [billing, setBilling] = useState<BillingSnapshot | null>(null);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
   const [savedSettings, setSavedSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const [profileForm, setProfileForm] = useState({ name: '', email: '', phone: '' });
+  const [passwordForm, setPasswordForm] = useState({ password: '', confirmPassword: '' });
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [verificationModal, setVerificationModal] = useState<VerificationChannel | null>(null);
+  const [pendingVerificationChannels, setPendingVerificationChannels] = useState<VerificationChannel[]>([]);
+  const [emailOtp, setEmailOtp] = useState('');
+  const [phoneOtp, setPhoneOtp] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [sendingEmailOtp, setSendingEmailOtp] = useState(false);
+  const [sendingPhoneOtp, setSendingPhoneOtp] = useState(false);
+  const [confirmingEmailOtp, setConfirmingEmailOtp] = useState(false);
+  const [confirmingPhoneOtp, setConfirmingPhoneOtp] = useState(false);
 
   useEffect(() => {
-    Promise.all([api.settings.get(), api.templates.list()])
-      .then(([settingsResult, templateResult]) => {
-        const normalizedSettings = {
-          ...settingsResult,
-          exports: {
-            ...settingsResult.exports,
-            defaultTemplate:
-              templateResult.find((template) => template.id === settingsResult.exports.defaultTemplate)?.id ??
-              templateResult[0]?.id ??
-              settingsResult.exports.defaultTemplate,
-          },
-        };
-        setSettings(normalizedSettings);
-        setSavedSettings(normalizedSettings);
-        setTemplates(templateResult);
+    Promise.all([api.auth.me(), api.profile.get(), api.billing.get(), api.settings.get()])
+      .then(([userResult, profileResult, billingResult, settingsResult]) => {
+        setUser(userResult);
+        setProfile(profileResult);
+        setBilling(billingResult);
+        setProfileForm({
+          name: profileResult.name ?? userResult.name ?? '',
+          email: profileResult.email ?? userResult.email ?? '',
+          phone: profileResult.phone ?? '',
+        });
+        setSettings(settingsResult);
+        setSavedSettings(settingsResult);
       })
       .catch((error) => toast.error(error instanceof Error ? error.message : 'Failed to load settings.'))
       .finally(() => setLoading(false));
@@ -119,6 +135,16 @@ export default function SettingsPage() {
   const isDirty = useMemo(
     () => JSON.stringify(settings) !== JSON.stringify(savedSettings),
     [savedSettings, settings]
+  );
+  const emailVerifiedForCurrentValue = Boolean(
+    profileForm.email.trim() &&
+    profile?.email_verified_at &&
+    profileForm.email.trim() === (profile?.email || '').trim()
+  );
+  const phoneVerifiedForCurrentValue = Boolean(
+    profileForm.phone.trim() &&
+    profile?.phone_verified_at &&
+    profileForm.phone.trim() === (profile?.phone || '').trim()
   );
 
   async function handleSave() {
@@ -136,8 +162,155 @@ export default function SettingsPage() {
     }
   }
 
-  function resetChanges() {
-    setSettings(savedSettings);
+  async function handleProfileSave() {
+    setSavingProfile(true);
+    try {
+      const updated = await api.profile.update({
+        name: profileForm.name.trim(),
+        email: profileForm.email.trim(),
+        phone: profileForm.phone.trim(),
+      });
+      setProfile(updated);
+      setProfileForm((current) => ({
+        ...current,
+        name: updated.name ?? current.name,
+        email: updated.email ?? current.email,
+        phone: updated.phone ?? current.phone,
+      }));
+      toast.success('Profile saved.');
+
+      const channels: VerificationChannel[] = [];
+      if (updated.email && !updated.email_verified_at) channels.push('email');
+      if (updated.phone && !updated.phone_verified_at) channels.push('phone');
+      if (channels.length > 0) {
+        setPendingVerificationChannels(channels);
+        await openVerificationModal(channels[0]);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save profile.');
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function openVerificationModal(channel: VerificationChannel) {
+    setVerificationModal(channel);
+    if (channel === 'email') {
+      setEmailOtp('');
+      await sendEmailOtp();
+    } else {
+      setPhoneOtp('');
+      await sendPhoneOtp();
+    }
+  }
+
+  async function sendEmailOtp() {
+    setSendingEmailOtp(true);
+    try {
+      await api.profile.sendEmailOtp();
+      toast.success('Email OTP sent.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to send email OTP right now.');
+    } finally {
+      setSendingEmailOtp(false);
+    }
+  }
+
+  async function sendPhoneOtp() {
+    setSendingPhoneOtp(true);
+    try {
+      await api.profile.sendPhoneOtp();
+      toast.success('Phone OTP sent.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to send phone OTP right now.');
+    } finally {
+      setSendingPhoneOtp(false);
+    }
+  }
+
+  async function confirmEmailOtp() {
+    setConfirmingEmailOtp(true);
+    try {
+      const updated = await api.profile.confirmEmailOtp(emailOtp.trim());
+      setProfile(updated);
+      setProfileForm((current) => ({ ...current, email: updated.email ?? current.email }));
+      setEmailOtp('');
+      toast.success('Email verified.');
+      await continuePendingVerification('email');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to confirm email OTP.');
+    } finally {
+      setConfirmingEmailOtp(false);
+    }
+  }
+
+  async function confirmPhoneOtp() {
+    setConfirmingPhoneOtp(true);
+    try {
+      const updated = await api.profile.confirmPhoneOtp(phoneOtp.trim());
+      setProfile(updated);
+      setProfileForm((current) => ({ ...current, phone: updated.phone ?? current.phone }));
+      setPhoneOtp('');
+      toast.success('Phone verified.');
+      await continuePendingVerification('phone');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to confirm phone OTP.');
+    } finally {
+      setConfirmingPhoneOtp(false);
+    }
+  }
+
+  async function continuePendingVerification(completedChannel: VerificationChannel) {
+    const remainingChannels = pendingVerificationChannels.filter((channel) => channel !== completedChannel);
+    setPendingVerificationChannels(remainingChannels);
+
+    if (remainingChannels.length > 0) {
+      await openVerificationModal(remainingChannels[0]);
+      return;
+    }
+
+    setVerificationModal(null);
+  }
+
+  async function handlePasswordSave() {
+    if (passwordForm.password.length < 8) {
+      toast.error('Password must be at least 8 characters.');
+      return;
+    }
+    if (passwordForm.password !== passwordForm.confirmPassword) {
+      toast.error('Passwords do not match.');
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      await api.auth.changePassword(passwordForm.password);
+      setPasswordForm({ password: '', confirmPassword: '' });
+      toast.success('Password updated.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update password.');
+    } finally {
+      setSavingPassword(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (deleteConfirmation !== 'DELETE') {
+      toast.error('Type DELETE to confirm account deletion.');
+      return;
+    }
+
+    setDeletingAccount(true);
+    try {
+      await api.auth.deleteAccount(deleteConfirmation);
+      setAuthToken(null);
+      toast.success('Account deleted.');
+      router.replace('/auth/signin');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete account.');
+    } finally {
+      setDeletingAccount(false);
+    }
   }
 
   if (loading) {
@@ -151,99 +324,155 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)_340px]">
-      <aside className="space-y-4">
-        <div className="app-panel p-5">
-          <div className="app-eyebrow">Settings map</div>
-          <h2 className="app-subheading mt-2">
-            Workspace controls
-          </h2>
-          <div className="mt-4 space-y-2">
+    <>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <section className="app-panel-strong p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="app-badge">Settings</div>
+              <h2 className="app-heading mt-3">
+                Account and workspace settings
+              </h2>
+              <p className="app-body mt-2 max-w-2xl">
+                Keep profile, billing, notifications, and privacy controls in one place.
+              </p>
+            </div>
+          </div>
+
+        <div className="mt-6 overflow-x-auto">
+          <nav className="flex min-w-max gap-2" aria-label="Settings sections">
             {SETTINGS_TABS.map((tab) => {
               const active = tab.id === activeTab;
               return (
                 <Link
                   key={tab.id}
-                  href={tab.id === 'general' ? '/settings' : `/settings?tab=${tab.id}`}
-                  className="block rounded-[18px] border px-4 py-4 transition hover:bg-[var(--bg-hover)]"
-                  style={{
-                    borderColor: active ? 'var(--border-strong)' : 'var(--border-subtle)',
-                    background: active ? 'rgba(255,255,255,0.04)' : 'transparent',
-                  }}
+                  href={tab.id === 'profile' ? '/settings' : `/settings?tab=${tab.id}`}
+                  className={`rounded-xl border px-4 py-3 text-left transition hover:bg-[var(--bg-hover)] ${
+                    active ? 'border-[var(--border-strong)] bg-[var(--accent-soft)]' : 'border-[var(--border-subtle)] bg-[var(--bg-panel)]'
+                  }`}
                 >
                   <div className="text-sm font-semibold text-[var(--text-primary)]">{tab.label}</div>
-                  <div className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{tab.description}</div>
+                  <div className="mt-0.5 text-xs text-[var(--text-secondary)]">{tab.description}</div>
                 </Link>
               );
             })}
-          </div>
+          </nav>
         </div>
-      </aside>
+      </section>
 
       <section className="space-y-6">
-        <div className="app-panel-strong p-6 sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="app-badge">Settings</div>
-              <h2 className="app-heading mt-4">
-                Configure how your resume workspace behaves
-              </h2>
-              <p className="app-body mt-3 max-w-2xl">
-                These settings are saved per user, not globally. Your notification rules, export defaults, privacy controls, and workspace preferences stay tied to your own account.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={resetChanges}
-                disabled={!isDirty || saving}
-                className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Reset
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={!isDirty || saving}
-                className="app-button-primary disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? 'Saving...' : 'Save settings'}
-              </button>
-            </div>
-          </div>
-        </div>
 
-        {activeTab === 'general' && (
-          <SectionCard
-            eyebrow="General settings"
-            title="Workspace identity and defaults"
-            description="Baseline preferences that shape the rest of your personal app experience."
-          >
-            <div className="grid gap-4 md:grid-cols-2">
-              <SelectCard
-                label="Default source platform"
-                value={settings.defaultSourcePlatform}
-                options={[
-                  { value: 'manual', label: 'Manual' },
-                  { value: 'linkedin', label: 'LinkedIn' },
-                  { value: 'indeed', label: 'Indeed' },
-                  { value: 'naukri', label: 'Naukri' },
-                ]}
-                onChange={(value) =>
-                  setSettings((current) => ({
-                    ...current,
-                    defaultSourcePlatform: value as UserSettings['defaultSourcePlatform'],
-                  }))
-                }
-              />
-              <CountryAutocompleteInput
-                label="Default region"
-                value={settings.defaultRegion}
-                onChange={(value) => setSettings((current) => ({ ...current, defaultRegion: value }))}
-                placeholder="India"
-              />
-            </div>
-          </SectionCard>
+        {activeTab === 'profile' && (
+          <div className="space-y-6">
+            <SectionCard
+              eyebrow="Profile"
+              title="Profile information"
+              description="Basic account details used across the workspace."
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <InputCard
+                  label="Full name"
+                  value={profileForm.name}
+                  onChange={(value) => setProfileForm((current) => ({ ...current, name: value }))}
+                  placeholder="Your full name"
+                />
+                <InputCard
+                  label="Email"
+                  value={profileForm.email}
+                  onChange={(value) => setProfileForm((current) => ({ ...current, email: value }))}
+                  placeholder="you@example.com"
+                  verified={emailVerifiedForCurrentValue}
+                />
+                <InputCard
+                  label="Phone"
+                  value={profileForm.phone}
+                  onChange={(value) => setProfileForm((current) => ({ ...current, phone: value }))}
+                  placeholder="+91 98765 43210"
+                  verified={phoneVerifiedForCurrentValue}
+                />
+                <ReadOnlyCard label="Account created" value={formatDate(user?.created_at)} />
+              </div>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleProfileSave}
+                  disabled={savingProfile}
+                  className="app-button-primary disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingProfile ? 'Saving...' : 'Save profile'}
+                </button>
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              eyebrow="Security"
+              title="Change password"
+              description="Set a new password for email sign-in."
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <InputCard
+                  label="New password"
+                  type="password"
+                  value={passwordForm.password}
+                  onChange={(value) => setPasswordForm((current) => ({ ...current, password: value }))}
+                  placeholder="At least 8 characters"
+                />
+                <InputCard
+                  label="Confirm new password"
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))}
+                  placeholder="Repeat password"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handlePasswordSave}
+                disabled={savingPassword || !passwordForm.password || !passwordForm.confirmPassword}
+                className="app-button-primary mt-5 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingPassword ? 'Updating...' : 'Update password'}
+              </button>
+            </SectionCard>
+
+            <SectionCard
+              eyebrow="Danger zone"
+              title="Delete account"
+              description="This removes your account and associated workspace data. Type DELETE to confirm."
+              variant="danger"
+            >
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                <div className="text-sm font-semibold text-rose-950">Permanent account deletion</div>
+                <p className="mt-2 text-sm leading-6 text-rose-700">
+                  This action cannot be undone. Your profile, resumes, history, and workspace settings will be removed.
+                </p>
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                <label className="block">
+                  <div className="text-sm font-semibold text-rose-950">Confirmation</div>
+                  <input
+                    type="text"
+                    value={deleteConfirmation}
+                    onChange={(event) => setDeleteConfirmation(event.target.value)}
+                    placeholder="Type DELETE"
+                    className="mt-3 w-full rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm text-rose-950 outline-none transition placeholder:text-rose-300 focus:border-rose-400 focus:ring-4 focus:ring-rose-100"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleDeleteAccount}
+                  disabled={deletingAccount || deleteConfirmation !== 'DELETE'}
+                  className="inline-flex items-center justify-center rounded-xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(225,29,72,0.24)] transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {deletingAccount ? 'Deleting...' : 'Delete account'}
+                </button>
+              </div>
+            </SectionCard>
+          </div>
+        )}
+
+        {activeTab === 'billing' && (
+          <BillingSettings billing={billing} />
         )}
 
         {activeTab === 'notifications' && (
@@ -301,59 +530,6 @@ export default function SettingsPage() {
           </SectionCard>
         )}
 
-        {activeTab === 'exports' && (
-          <SectionCard
-            eyebrow="Export defaults"
-            title="Control how downloads are packaged"
-            description="Choose the template and file style your account should use by default."
-          >
-            <div className="grid gap-4 md:grid-cols-2">
-              <SelectCard
-                label="Default template"
-                value={settings.exports.defaultTemplate}
-                options={templates.map((template) => ({ value: template.id, label: template.name }))}
-                onChange={(value) =>
-                  setSettings((current) => ({
-                    ...current,
-                    exports: { ...current.exports, defaultTemplate: value },
-                  }))
-                }
-              />
-              <SelectCard
-                label="File naming"
-                value={settings.exports.fileStyle}
-                options={[
-                  { value: 'role-company-date', label: 'Role · Company · Date' },
-                  { value: 'company-role', label: 'Company · Role' },
-                  { value: 'candidate-role', label: 'Candidate · Role' },
-                ]}
-                onChange={(value) =>
-                  setSettings((current) => ({
-                    ...current,
-                    exports: {
-                      ...current.exports,
-                      fileStyle: value as UserSettings['exports']['fileStyle'],
-                    },
-                  }))
-                }
-              />
-            </div>
-            <div className="mt-4">
-              <ToggleRow
-                label="Include cover letter on export"
-                description="Bundle the generated cover letter into your normal export flow."
-                checked={settings.exports.includeCoverLetter}
-                onChange={(checked) =>
-                  setSettings((current) => ({
-                    ...current,
-                    exports: { ...current.exports, includeCoverLetter: checked },
-                  }))
-                }
-              />
-            </div>
-          </SectionCard>
-        )}
-
         {activeTab === 'privacy' && (
           <SectionCard
             eyebrow="Privacy"
@@ -398,337 +574,35 @@ export default function SettingsPage() {
           </SectionCard>
         )}
 
-        {activeTab === 'resume' && (
-          <div className="space-y-6">
-            <SectionCard
-              eyebrow="Resume formatting"
-              title="Control how resumes are generated and rendered"
-              description="These values are saved to your account and used by generation, preview, and export."
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                <InputCard
-                  label="Summary max words"
-                  value={String(settings.resume.formatting.summaryMaxWords)}
-                  onChange={(value) =>
-                    setSettings((current) => ({
-                      ...current,
-                      resume: {
-                        ...current.resume,
-                        formatting: {
-                          ...current.resume.formatting,
-                          summaryMaxWords: clampNumber(value, current.resume.formatting.summaryMaxWords, 10, 80),
-                        },
-                      },
-                    }))
-                  }
-                />
-                <InputCard
-                  label="Max bullets per section"
-                  value={String(settings.resume.formatting.maxBulletsPerSection)}
-                  onChange={(value) =>
-                    setSettings((current) => ({
-                      ...current,
-                      resume: {
-                        ...current.resume,
-                        formatting: {
-                          ...current.resume.formatting,
-                          maxBulletsPerSection: clampNumber(value, current.resume.formatting.maxBulletsPerSection, 1, 10),
-                        },
-                      },
-                    }))
-                  }
-                />
-                <SelectCard
-                  label="Skills separator"
-                  value={settings.resume.formatting.skillsSeparator}
-                  options={[
-                    { value: 'comma', label: 'Comma separated' },
-                    { value: 'bullet', label: 'Bullet separator' },
-                  ]}
-                  onChange={(value) =>
-                    setSettings((current) => ({
-                      ...current,
-                      resume: {
-                        ...current.resume,
-                        formatting: { ...current.resume.formatting, skillsSeparator: value as UserSettings['resume']['formatting']['skillsSeparator'] },
-                      },
-                    }))
-                  }
-                />
-                <SelectCard
-                  label="Link display"
-                  value={settings.resume.formatting.linkStyle}
-                  options={[
-                    { value: 'compact', label: 'Compact labels' },
-                    { value: 'full', label: 'Full links' },
-                  ]}
-                  onChange={(value) =>
-                    setSettings((current) => ({
-                      ...current,
-                      resume: {
-                        ...current.resume,
-                        formatting: { ...current.resume.formatting, linkStyle: value as UserSettings['resume']['formatting']['linkStyle'] },
-                      },
-                    }))
-                  }
-                />
-                <SelectCard
-                  label="Page size"
-                  value={settings.resume.formatting.pageSize}
-                  options={[
-                    { value: 'A4', label: 'A4' },
-                    { value: 'Letter', label: 'Letter' },
-                  ]}
-                  onChange={(value) =>
-                    setSettings((current) => ({
-                      ...current,
-                      resume: {
-                        ...current.resume,
-                        formatting: { ...current.resume.formatting, pageSize: value as UserSettings['resume']['formatting']['pageSize'] },
-                      },
-                    }))
-                  }
-                />
+        {(activeTab === 'notifications' || activeTab === 'privacy') && isDirty && (
+          <div className="app-panel-muted flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+            <div>
+              <div className="text-sm font-semibold text-[var(--text-primary)]">Unsaved changes</div>
+              <div className="mt-1 text-xs text-[var(--text-secondary)]">
+                Save your notification and privacy changes to apply them to your account.
               </div>
-              <div className="mt-4 space-y-3">
-                <ToggleRow
-                  label="Repeat headings on continued pages"
-                  description="If a section continues on page 2 or later, print the section heading again."
-                  checked={settings.resume.formatting.repeatSectionHeadingsOnNewPage}
-                  onChange={(checked) =>
-                    setSettings((current) => ({
-                      ...current,
-                      resume: {
-                        ...current.resume,
-                        formatting: { ...current.resume.formatting, repeatSectionHeadingsOnNewPage: checked },
-                      },
-                    }))
-                  }
-                />
-                <ToggleRow
-                  label="Show page numbers"
-                  description="Add page numbers when the resume flows to multiple pages."
-                  checked={settings.resume.formatting.showPageNumbers}
-                  onChange={(checked) =>
-                    setSettings((current) => ({
-                      ...current,
-                      resume: {
-                        ...current.resume,
-                        formatting: { ...current.resume.formatting, showPageNumbers: checked },
-                      },
-                    }))
-                  }
-                />
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              eyebrow="Resume structure"
-              title="Choose section defaults and layout limits"
-              description="These defaults guide new resume generation and the default structure in the editor."
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                <InputCard
-                  label="Max projects"
-                  value={String(settings.resume.structure.maxProjects)}
-                  onChange={(value) =>
-                    setSettings((current) => ({
-                      ...current,
-                      resume: {
-                        ...current.resume,
-                        structure: {
-                          ...current.resume.structure,
-                          maxProjects: clampNumber(value, current.resume.structure.maxProjects, 1, 8),
-                        },
-                      },
-                    }))
-                  }
-                />
-                <InputCard
-                  label="Max education items"
-                  value={String(settings.resume.structure.maxEducationItems)}
-                  onChange={(value) =>
-                    setSettings((current) => ({
-                      ...current,
-                      resume: {
-                        ...current.resume,
-                        structure: {
-                          ...current.resume.structure,
-                          maxEducationItems: clampNumber(value, current.resume.structure.maxEducationItems, 1, 6),
-                        },
-                      },
-                    }))
-                  }
-                />
-              </div>
-              <div className="mt-5">
-                <div className="text-sm font-semibold text-[var(--text-primary)]">Section order</div>
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                  Use a comma-separated list from: summary, skills, experience, projects, achievements, education, languages, hobbies
-                </p>
-                <textarea
-                  value={settings.resume.structure.sectionOrder.join(', ')}
-                  onChange={(event) =>
-                    setSettings((current) => ({
-                      ...current,
-                      resume: {
-                        ...current.resume,
-                        structure: {
-                          ...current.resume.structure,
-                          sectionOrder: normalizeSectionOrder(event.target.value, current.resume.structure.sectionOrder),
-                        },
-                      },
-                    }))
-                  }
-                  className="input-shell mt-3 min-h-[88px] w-full"
-                />
-              </div>
-              <div className="mt-5 grid gap-3 md:grid-cols-2">
-                {Object.entries(settings.resume.structure.defaultSectionVisibility).map(([key, checked]) => (
-                  <ToggleRow
-                    key={key}
-                    label={`Keep ${formatSectionLabel(key)} by default`}
-                    description={`New resumes and default previews start with ${formatSectionLabel(key).toLowerCase()} ${checked ? 'enabled' : 'disabled'}.`}
-                    checked={checked}
-                    onChange={(nextChecked) =>
-                      setSettings((current) => ({
-                        ...current,
-                        resume: {
-                          ...current.resume,
-                          structure: {
-                            ...current.resume.structure,
-                            defaultSectionVisibility: {
-                              ...current.resume.structure.defaultSectionVisibility,
-                              [key]: nextChecked,
-                            },
-                          },
-                        },
-                      }))
-                    }
-                  />
-                ))}
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              eyebrow="Prompt templates"
-              title="Choose the active prompt per resume stage"
-              description="If a custom prompt is marked active, only that prompt is used for that section. If not, the visible default prompt runs."
-            >
-              <div className="space-y-5">
-                {Object.entries(settings.resume.prompts).map(([key, prompt]) => (
-                  <div key={key} className="app-panel-muted p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-[var(--text-primary)]">{prompt.label}</div>
-                        <div className="mt-1 text-sm text-[var(--text-secondary)]">{prompt.description}</div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSettings((current) => ({
-                              ...current,
-                              resume: {
-                                ...current.resume,
-                                prompts: {
-                                  ...current.resume.prompts,
-                                  [key]: { ...current.resume.prompts[key as keyof UserSettings['resume']['prompts']], activeMode: 'default' },
-                                },
-                              },
-                            }))
-                          }
-                          className={prompt.activeMode === 'default' ? 'app-button-primary px-3 py-2 text-xs' : 'app-button-secondary px-3 py-2 text-xs'}
-                        >
-                          Use default
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSettings((current) => ({
-                              ...current,
-                              resume: {
-                                ...current.resume,
-                                prompts: {
-                                  ...current.resume.prompts,
-                                  [key]: { ...current.resume.prompts[key as keyof UserSettings['resume']['prompts']], activeMode: 'custom' },
-                                },
-                              },
-                            }))
-                          }
-                          className={prompt.activeMode === 'custom' ? 'app-button-primary px-3 py-2 text-xs' : 'app-button-secondary px-3 py-2 text-xs'}
-                        >
-                          Use custom
-                        </button>
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                      <label className="block">
-                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">Default template</div>
-                        <textarea value={prompt.defaultTemplate} readOnly className="input-shell mt-3 min-h-[240px] w-full opacity-80" />
-                      </label>
-                      <label className="block">
-                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">Custom template</div>
-                        <textarea
-                          value={prompt.customTemplate}
-                          onChange={(event) =>
-                            setSettings((current) => ({
-                              ...current,
-                              resume: {
-                                ...current.resume,
-                                prompts: {
-                                  ...current.resume.prompts,
-                                  [key]: {
-                                    ...current.resume.prompts[key as keyof UserSettings['resume']['prompts']],
-                                    customTemplate: event.target.value,
-                                  },
-                                },
-                              },
-                            }))
-                          }
-                          placeholder={`Write the custom ${prompt.label.toLowerCase()} prompt here. Use the visible default as the base if you want full control.`}
-                          className="input-shell mt-3 min-h-[240px] w-full"
-                        />
-                      </label>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
+            </div>
+            <button type="button" onClick={handleSave} disabled={saving} className="app-button-primary px-3 py-2 text-xs disabled:opacity-60">
+              {saving ? 'Saving...' : 'Save'}
+            </button>
           </div>
         )}
-
       </section>
-
-      <aside className="space-y-6">
-        <div className="app-panel p-6">
-          <div className="app-eyebrow">Saved for you</div>
-          <h3 className="app-subheading mt-2">
-            Personal settings profile
-          </h3>
-          <p className="app-body mt-3">
-            These controls are stored per signed-in user, so one user’s preferences do not affect another user’s workspace.
-          </p>
-          <div className="mt-5 space-y-3">
-            <MiniMetric label="Workspace name" value={settings.workspaceName} />
-            <MiniMetric label="Default source" value={settings.defaultSourcePlatform} />
-            <MiniMetric label="Default template" value={templateLabel(settings.exports.defaultTemplate, templates)} />
-          </div>
-        </div>
-
-        <div className="app-panel p-6">
-          <div className="app-eyebrow">Save status</div>
-          <h3 className="app-subheading mt-2">
-            {isDirty ? 'Unsaved changes' : 'All changes saved'}
-          </h3>
-          <p className="app-body mt-3">
-            {isDirty
-              ? 'You have personal settings changes waiting to be written to the database.'
-              : 'Your settings page is synced with the current values stored for your account.'}
-          </p>
-        </div>
-      </aside>
     </div>
+    {verificationModal && (
+      <ContactVerificationModal
+        channel={verificationModal}
+        value={verificationModal === 'email' ? profileForm.email : profileForm.phone}
+        otpValue={verificationModal === 'email' ? emailOtp : phoneOtp}
+        onOtpChange={verificationModal === 'email' ? setEmailOtp : setPhoneOtp}
+        onResend={verificationModal === 'email' ? sendEmailOtp : sendPhoneOtp}
+        onConfirm={verificationModal === 'email' ? confirmEmailOtp : confirmPhoneOtp}
+        onClose={() => setVerificationModal(null)}
+        sending={verificationModal === 'email' ? sendingEmailOtp : sendingPhoneOtp}
+        confirming={verificationModal === 'email' ? confirmingEmailOtp : confirmingPhoneOtp}
+      />
+    )}
+    </>
   );
 }
 
@@ -737,17 +611,21 @@ function SectionCard({
   title,
   description,
   children,
+  variant = 'default',
 }: {
   eyebrow: string;
   title: string;
   description: string;
   children: React.ReactNode;
+  variant?: 'default' | 'danger';
 }) {
+  const isDanger = variant === 'danger';
+
   return (
-    <div className="app-panel p-6">
-      <div className="app-eyebrow">{eyebrow}</div>
-      <h3 className="app-subheading mt-2">{title}</h3>
-      <p className="app-body mt-3 max-w-2xl">{description}</p>
+    <div className={`p-6 ${isDanger ? 'rounded-[var(--radius-panel)] border border-rose-200 bg-rose-50/70 shadow-[var(--shadow-panel)]' : 'app-panel'}`}>
+      <div className={isDanger ? 'text-[11px] font-semibold uppercase tracking-[0.28em] text-rose-600' : 'app-eyebrow'}>{eyebrow}</div>
+      <h3 className={`mt-2 text-xl font-semibold ${isDanger ? 'text-rose-950' : 'text-[var(--text-primary)]'}`}>{title}</h3>
+      <p className={`mt-3 max-w-2xl text-sm leading-6 ${isDanger ? 'text-rose-700' : 'text-[var(--text-secondary)]'}`}>{description}</p>
       <div className="mt-6">{children}</div>
     </div>
   );
@@ -773,12 +651,15 @@ function ToggleRow({
       <button
         type="button"
         onClick={() => onChange(!checked)}
-        className="relative h-7 w-14 rounded-full transition"
-        style={{ background: checked ? 'var(--accent)' : 'rgba(255,255,255,0.08)' }}
+        className={`relative h-7 w-14 rounded-full border transition ${
+          checked
+            ? 'border-[var(--accent)] bg-[var(--accent)]'
+            : 'border-slate-300 bg-slate-200 shadow-inner'
+        }`}
         aria-pressed={checked}
       >
         <span
-          className="absolute top-1 h-5 w-5 rounded-full bg-white transition"
+          className="absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition"
           style={{ left: checked ? 'calc(100% - 24px)' : '4px' }}
         />
       </button>
@@ -786,28 +667,48 @@ function ToggleRow({
   );
 }
 
-function SelectCard({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: Array<{ value: string; label: string }>;
-  onChange: (value: string) => void;
-}) {
+function ReadOnlyCard({ label, value }: { label: string; value: string }) {
   return (
-    <label className="app-panel-muted block p-4">
+    <div className="app-panel-muted p-4">
       <div className="text-sm font-semibold text-[var(--text-primary)]">{label}</div>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="input-shell mt-4">
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+      <div className="mt-4 min-h-[46px] rounded-xl border px-4 py-3 text-sm text-[var(--text-secondary)]" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-input)' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function BillingSettings({ billing }: { billing: BillingSnapshot | null }) {
+  const [upgrading, setUpgrading] = useState(false);
+
+  async function handleUpgrade() {
+    if (billing?.plan === 'plus') return;
+
+    setUpgrading(true);
+    try {
+      const checkout = await api.billing.createPlusCheckout();
+      window.location.href = checkout.checkoutUrl;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to open payment gateway.');
+      setUpgrading(false);
+    }
+  }
+
+  if (!billing) {
+    return (
+      <SectionCard eyebrow="Billing" title="Billing unavailable" description="Unable to load billing details right now.">
+        <div className="text-sm text-[var(--text-secondary)]">Please retry in a moment.</div>
+      </SectionCard>
+    );
+  }
+
+  return (
+    <BillingUsagePanel
+      billing={billing}
+      onUpgrade={handleUpgrade}
+      upgrading={upgrading}
+      showIdentity={false}
+    />
   );
 }
 
@@ -816,148 +717,127 @@ function InputCard({
   value,
   onChange,
   placeholder,
+  type = 'text',
+  verified,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  type?: string;
+  verified?: boolean;
 }) {
-  return (
-    <label className="app-panel-muted block p-4">
-      <div className="text-sm font-semibold text-[var(--text-primary)]">{label}</div>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="input-shell mt-4"
-      />
-    </label>
-  );
-}
-
-function CountryAutocompleteInput({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-}) {
-  const [results, setResults] = useState<Array<{ id: string; label: string }>>([]);
-  const [searching, setSearching] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const deferredQuery = useDeferredValue(value.trim());
-
-  useEffect(() => {
-    if (deferredQuery.length < 2) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
-
-    let active = true;
-    setSearching(true);
-
-    fetch(`/api/location-search?q=${encodeURIComponent(deferredQuery)}&scope=country`, {
-      cache: 'no-store',
-    })
-      .then((response) => response.json())
-      .then((data: { results?: Array<{ id: string; label: string }> }) => {
-        if (!active) return;
-        setResults(data.results ?? []);
-      })
-      .catch(() => {
-        if (!active) return;
-        setResults([]);
-      })
-      .finally(() => {
-        if (active) {
-          setSearching(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [deferredQuery]);
-
   return (
     <label className="app-panel-muted block p-4">
       <div className="text-sm font-semibold text-[var(--text-primary)]">{label}</div>
       <div className="relative mt-4">
         <input
+          type={type}
           value={value}
-          onFocus={() => setFocused(true)}
-          onBlur={() => {
-            window.setTimeout(() => setFocused(false), 120);
-          }}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          className="input-shell"
+          className={`input-shell ${verified === undefined ? '' : 'pr-12'}`}
         />
-        {focused && (results.length > 0 || searching) && (
-          <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 overflow-hidden rounded-[18px] border bg-[var(--bg-panel)] shadow-[var(--shadow-panel)]" style={{ borderColor: 'var(--border-subtle)' }}>
-            {searching ? (
-              <div className="px-4 py-3 text-sm text-[var(--text-secondary)]">Searching countries...</div>
-            ) : (
-              results.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    onChange(item.label);
-                    setFocused(false);
-                  }}
-                  className="block w-full border-b px-4 py-3 text-left text-sm text-[var(--text-secondary)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] last:border-b-0"
-                  style={{ borderColor: 'var(--border-subtle)' }}
-                >
-                  {item.label}
-                </button>
-              ))
-            )}
-          </div>
-        )}
+        {verified !== undefined && <ContactStatusIcon verified={verified} />}
       </div>
     </label>
   );
 }
 
-function clampNumber(raw: string, fallback: number, min: number, max: number) {
-  const parsed = Number.parseInt(raw, 10);
-  if (Number.isNaN(parsed)) return fallback;
-  return Math.min(Math.max(parsed, min), max);
-}
+function ContactStatusIcon({ verified }: { verified: boolean }) {
+  const Icon = verified ? CheckCircle2 : XCircle;
 
-function normalizeSectionOrder(
-  raw: string,
-  fallback: UserSettings['resume']['structure']['sectionOrder']
-): UserSettings['resume']['structure']['sectionOrder'] {
-  const allowed = new Set(['summary', 'skills', 'experience', 'projects', 'achievements', 'education', 'languages', 'hobbies']);
-  const requested = raw
-    .split(',')
-    .map((item) => item.trim().toLowerCase())
-    .filter((item): item is UserSettings['resume']['structure']['sectionOrder'][number] => allowed.has(item));
-  const unique = Array.from(new Set(requested));
-  if (unique.length < 5) return fallback;
-  return unique;
-}
-
-function formatSectionLabel(value: string) {
-  return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="app-panel-muted flex items-center justify-between gap-4 px-4 py-3">
-      <span className="text-sm text-[var(--text-secondary)]">{label}</span>
-      <span className="text-right text-sm font-semibold text-[var(--text-primary)]">{value}</span>
+    <span
+      className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 ${
+        verified ? 'text-emerald-600' : 'text-rose-600'
+      }`}
+      aria-hidden="true"
+    >
+      <Icon className="h-5 w-5" strokeWidth={2.4} />
+    </span>
+  );
+}
+
+function ContactVerificationModal({
+  channel,
+  value,
+  otpValue,
+  onOtpChange,
+  onResend,
+  onConfirm,
+  onClose,
+  sending,
+  confirming,
+}: {
+  channel: VerificationChannel;
+  value: string;
+  otpValue: string;
+  onOtpChange: (value: string) => void;
+  onResend: () => void;
+  onConfirm: () => void;
+  onClose: () => void;
+  sending: boolean;
+  confirming: boolean;
+}) {
+  const label = channel === 'email' ? 'email address' : 'phone number';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+      <button
+        type="button"
+        className="absolute inset-0 bg-[var(--bg-overlay)]"
+        onClick={onClose}
+        aria-label="Close verification popup"
+      />
+      <div className="relative w-full max-w-md rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--bg-panel-strong)] p-6 shadow-[var(--shadow-panel)]">
+        <div className="app-eyebrow">Verification required</div>
+        <h3 className="app-subheading mt-2">Verify your {label}</h3>
+        <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
+          We sent a 6-digit OTP to <span className="font-semibold text-[var(--text-primary)]">{value}</span>. Enter it below to finish updating your profile.
+        </p>
+
+        <label className="mt-5 block">
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">OTP code</span>
+          <input
+            value={otpValue}
+            onChange={(event) => onOtpChange(event.target.value)}
+            placeholder="Enter 6-digit OTP"
+            inputMode="numeric"
+            maxLength={6}
+            className="input-shell"
+          />
+        </label>
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onResend}
+            disabled={sending}
+            className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {sending ? 'Sending...' : 'Resend OTP'}
+          </button>
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="app-button-secondary">
+              Later
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={!otpValue.trim() || confirming}
+              className="app-button-primary disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {confirming ? 'Verifying...' : 'Verify'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function templateLabel(templateId: string, templates: ResumeTemplate[]) {
-  return templates.find((template) => template.id === templateId)?.name ?? templateId;
+function formatDate(value?: string) {
+  if (!value) return 'Not available';
+  return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }

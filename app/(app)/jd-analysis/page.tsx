@@ -45,6 +45,8 @@ export default function JDAnalysisPage() {
     }
   }
 
+  const strategy = analysis ? getRoleStrategy(analysis) : null;
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.9fr)]">
       <section className="app-panel-strong p-6 sm:p-7">
@@ -54,12 +56,12 @@ export default function JDAnalysisPage() {
             <a href="/billing" className="ml-2 font-semibold underline underline-offset-4">Upgrade to Plus</a>.
           </div>
         )}
-        <div className="app-eyebrow">JD analysis</div>
+        <div className="app-eyebrow">Target role analysis</div>
         <h2 className="app-heading mt-2">
-          Break down the role before you generate
+          Decide whether this job is worth applying to
         </h2>
         <p className="app-body mt-3 max-w-2xl">
-          Surface ATS keywords, required skills, experience level, and profile gaps from a pasted job description.
+          Paste a job description to evaluate fit, missing proof points, seniority risk, and the best next move before creating application assets.
         </p>
 
         <textarea
@@ -76,19 +78,31 @@ export default function JDAnalysisPage() {
           disabled={loading || jdLimitReached}
           className="app-button-primary mt-5 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {loading ? 'Analyzing...' : 'Analyze job description'}
+          {loading ? 'Analyzing...' : 'Evaluate target role'}
         </button>
       </section>
 
       <aside className="space-y-6">
-        <section className="app-panel p-6">
-          <div className="app-eyebrow">Match summary</div>
+        <section className="app-panel-strong p-6">
+          <div className="app-eyebrow">Application recommendation</div>
           {analysis ? (
             <>
-              <div className="mt-3 text-5xl font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
-                {analysis.atsScore}%
+              <div className={`mt-4 inline-flex rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] ${strategy?.className}`}>
+                {strategy?.label}
               </div>
-              <div className="mt-2 text-sm font-semibold text-[var(--accent-strong)]">{analysis.profileMatchLabel}</div>
+              <h3 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
+                {strategy?.title}
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
+                {strategy?.body}
+              </p>
+              <div className="mt-5 app-panel-muted px-4 py-3">
+                <div className="app-caption">Interview readiness</div>
+                <div className="mt-2 text-4xl font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
+                  {analysis.atsScore}%
+                </div>
+                <div className="mt-2 text-sm font-semibold text-[var(--accent-strong)]">{analysis.profileMatchLabel}</div>
+              </div>
               <div className="mt-5 space-y-3">
                 <Metric label="Detected role" value={analysis.extractedRole} />
                 <Metric label="Seniority" value={analysis.seniorityLevel} />
@@ -97,12 +111,13 @@ export default function JDAnalysisPage() {
               </div>
             </>
           ) : (
-            <p className="mt-4 text-sm leading-6 text-[var(--text-secondary)]">Run an analysis to see fit, seniority, and domain signals here.</p>
+            <p className="mt-4 text-sm leading-6 text-[var(--text-secondary)]">Run an evaluation to see whether to apply now, improve first, network first, or skip the role.</p>
           )}
         </section>
 
         <section className="app-panel p-6">
-          <div className="app-eyebrow">ATS keywords</div>
+          <div className="app-eyebrow">Role signals</div>
+          <h3 className="app-subheading mt-2">Keywords are evidence clues</h3>
           <div className="mt-4 flex flex-wrap gap-2">
             {analysis?.keywords?.length ? analysis.keywords.map((keyword) => (
               <span key={keyword} className="app-chip">
@@ -115,12 +130,12 @@ export default function JDAnalysisPage() {
 
       {analysis && (
         <section className="xl:col-span-2 grid gap-6 lg:grid-cols-3">
-          <Panel title="Required skills" items={analysis.requiredSkills} />
-          <Panel title="Missing skills" items={analysis.missingSkills} tone="amber" />
-          <Panel title="Top responsibilities" items={analysis.responsibilities} />
-          <Panel title="Strengths" items={analysis.strengths} />
-          <Panel title="Gaps" items={analysis.gaps} tone="rose" />
-          <Panel title="Recommendations" items={analysis.suggestions.map((item) => `${item.action} — ${item.reason}`)} />
+          <Panel title="Must-have signals" items={analysis.requiredSkills} />
+          <Panel title="Missing evidence" items={analysis.missingSkills} tone="amber" />
+          <Panel title="Daily work in this role" items={analysis.responsibilities} />
+          <Panel title="Your current strengths" items={analysis.strengths} />
+          <Panel title="Risks before applying" items={analysis.gaps} tone="rose" />
+          <Panel title="Next best moves" items={analysis.suggestions.map((item) => `${item.action} - ${item.reason}`)} />
         </section>
       )}
     </div>
@@ -139,9 +154,9 @@ function Metric({ label, value }: { label: string; value: string }) {
 function Panel({ title, items, tone = 'slate' }: { title: string; items: string[]; tone?: 'slate' | 'amber' | 'rose' }) {
   const toneClass =
     tone === 'amber'
-      ? 'border border-amber-300/40 bg-amber-500/10 text-amber-100'
+      ? 'border border-amber-300/50 bg-amber-500/10 text-[var(--warning)]'
       : tone === 'rose'
-        ? 'border border-rose-300/40 bg-rose-500/10 text-rose-100'
+        ? 'border border-rose-300/50 bg-rose-500/10 text-[var(--danger)]'
         : 'border border-white/10 bg-white/[0.04] text-[var(--text-secondary)]';
 
   return (
@@ -158,4 +173,34 @@ function Panel({ title, items, tone = 'slate' }: { title: string; items: string[
       </div>
     </section>
   );
+}
+
+function getRoleStrategy(analysis: JDAnalysisResult) {
+  const score = analysis.atsScore;
+  const missingCount = analysis.missingSkills.length + analysis.gaps.length;
+
+  if (score >= 80 && missingCount <= 3) {
+    return {
+      label: 'Apply now',
+      title: 'Strong enough to move',
+      body: 'Create the tailored resume, then spend effort on referral outreach and follow-up. Do not over-optimize the document.',
+      className: 'app-score-high',
+    };
+  }
+
+  if (score >= 65) {
+    return {
+      label: 'Improve first',
+      title: 'Promising, but close the obvious gaps',
+      body: 'You likely have a viable angle, but the missing evidence can reduce callbacks. Add proof points or reframe projects before applying.',
+      className: 'app-score-medium',
+    };
+  }
+
+  return {
+    label: 'Be selective',
+    title: 'High-risk application',
+    body: 'This role may need stronger evidence, a referral, or a different positioning strategy. Consider skipping unless you can credibly cover the must-haves.',
+    className: 'app-score-low',
+  };
 }

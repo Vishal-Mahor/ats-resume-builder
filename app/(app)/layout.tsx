@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { Moon, Sun } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, setAuthToken, type NotificationItem, type User } from '@/lib/api';
 
@@ -13,22 +14,20 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
-  { href: '/new-resume', label: 'Create Resume', icon: SparkIcon },
-  { href: '/resume-history', label: 'Resume History', icon: HistoryIcon },
-  { href: '/jd-analysis', label: 'JD Analysis', icon: AnalysisIcon },
-  { href: '/profile', label: 'My Profile', icon: ProfileIcon },
-  { href: '/templates', label: 'Templates', icon: TemplateIcon },
-  { href: '/analytics', label: 'Analytics', icon: ChartIcon },
-  { href: '/billing', label: 'Billing', icon: WalletIcon },
+  { href: '/new-resume', label: 'My Resume', icon: SparkIcon },
+  { href: '/jobs', label: 'Jobs', icon: JobsIcon },
+  { href: '/resume-history', label: 'My Jobs', icon: HistoryIcon },
   { href: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 const PROFILE_MENU = [
-  { href: '/profile', label: 'My Profile' },
+  { href: '/settings?tab=profile', label: 'Profile' },
+  { href: '/settings?tab=billing', label: 'Billing / Subscription' },
   { href: '/settings', label: 'Settings' },
-  { href: '/billing', label: 'Billing / Subscription' },
   { href: '/support', label: 'Help / Support' },
 ];
+
+type ThemeMode = 'light' | 'dark';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -42,8 +41,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem('ats-theme-mode');
+    const nextTheme: ThemeMode = savedTheme === 'dark' ? 'dark' : 'light';
+    setThemeMode(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    window.localStorage.setItem('ats-theme-mode', themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     let active = true;
@@ -201,13 +213,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen">
         <aside
           className={`relative hidden h-screen shrink-0 border-r px-3 py-4 transition-all duration-300 lg:sticky lg:top-0 lg:flex lg:flex-col ${
-            collapsed ? 'w-[92px]' : 'w-[286px]'
+            collapsed ? 'w-[84px]' : 'w-[264px]'
           }`}
-          style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+          style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', backdropFilter: 'blur(22px)' }}
         >
-          <div className="mb-6 flex items-center justify-between gap-3 px-2">
+          <div className="flex items-center justify-between gap-3 px-2">
             <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl text-lg font-semibold" style={{ background: 'linear-gradient(135deg, #22d3ee, #6366f1)', color: '#06111d', boxShadow: '0 0 28px rgba(34,211,238,0.22)' }}>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl text-lg font-semibold text-white shadow-[var(--shadow-glow)]" style={{ background: 'var(--brand-gradient)' }}>
                 A
               </div>
               {!collapsed && (
@@ -229,20 +241,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
 
-          <div className="app-panel-muted mb-4 p-3">
-            {!collapsed ? (
-              <>
-                <div className="app-eyebrow">Workspace overview</div>
-                <div className="mt-2 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
-                  Tailor resumes faster, track ATS progress, and keep every draft tied to real roles.
-                </div>
-              </>
-            ) : (
-              <div className="flex justify-center">
-                <SparkIcon active />
-              </div>
-            )}
-          </div>
+          <div className="my-5 border-t" style={{ borderColor: 'var(--border-subtle)' }} />
 
           <nav className="flex-1 space-y-1">
             {NAV_ITEMS.map((item) => {
@@ -266,7 +265,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 >
                   <div
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition"
-                    style={{ background: active ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)' }}
+                    style={{ background: active ? 'var(--accent-soft)' : 'var(--icon-tile)' }}
                   >
                     <Icon active={active} />
                   </div>
@@ -283,7 +282,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b px-5 py-4 backdrop-blur-xl sm:px-7" style={{ borderColor: 'var(--border-subtle)', background: 'rgba(6,14,24,0.88)' }}>
+          <header className="sticky top-0 z-20 border-b px-5 py-4 backdrop-blur-xl sm:px-7" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-header)' }}>
             <div className="flex w-full items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <button
@@ -302,18 +301,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
 
               <div className="flex items-center gap-3">
-                <Link
-                  href="/jd-analysis"
-                  className="app-button-secondary hidden sm:inline-flex"
+                <button
+                  type="button"
+                  onClick={() => setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'))}
+                  className="group flex h-11 items-center gap-2 rounded-full border px-1.5 text-sm font-semibold transition"
+                  style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)', color: 'var(--text-secondary)' }}
+                  aria-label={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} theme`}
+                  aria-pressed={themeMode === 'dark'}
                 >
-                  Analyze JD
-                </Link>
-                <Link
-                  href="/new-resume"
-                  className="app-button-primary"
-                >
-                  Create New Resume
-                </Link>
+                  <span
+                    className="flex h-8 w-8 items-center justify-center rounded-full transition"
+                    style={{
+                      background: themeMode === 'light' ? 'var(--accent-soft)' : 'transparent',
+                      color: themeMode === 'light' ? 'var(--accent-strong)' : 'var(--text-muted)',
+                    }}
+                    aria-hidden="true"
+                  >
+                    <Sun size={15} />
+                  </span>
+                  <span
+                    className="flex h-8 w-8 items-center justify-center rounded-full transition"
+                    style={{
+                      background: themeMode === 'dark' ? 'var(--accent-soft)' : 'transparent',
+                      color: themeMode === 'dark' ? 'var(--accent-strong)' : 'var(--text-muted)',
+                    }}
+                    aria-hidden="true"
+                  >
+                    <Moon size={15} />
+                  </span>
+                </button>
+
                 <div className="relative hidden md:block" ref={notificationMenuRef}>
                   <button
                     type="button"
@@ -336,7 +353,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   {notificationMenuOpen && (
                     <div
                       className="absolute right-0 top-[calc(100%+12px)] z-30 w-[340px] rounded-[20px] border p-3 backdrop-blur-xl"
-                      style={{ background: 'rgba(18,18,19,0.98)', borderColor: 'var(--border-subtle)', boxShadow: '0 24px 48px rgba(0,0,0,0.34)' }}
+                      style={{ background: 'var(--bg-menu)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-panel)' }}
                     >
                       <div className="mb-2 flex items-center justify-between px-1">
                         <div className="text-sm font-semibold text-[var(--text-primary)]">Notifications</div>
@@ -386,7 +403,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   {profileMenuOpen && (
                     <div
                       className="absolute right-0 top-[calc(100%+12px)] z-30 w-[280px] rounded-[20px] border p-2 backdrop-blur-xl"
-                      style={{ background: 'rgba(18,18,19,0.98)', borderColor: 'var(--border-subtle)', boxShadow: '0 24px 48px rgba(0,0,0,0.34)' }}
+                      style={{ background: 'var(--bg-menu)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-panel)' }}
                     >
                       {PROFILE_MENU.map((item) => (
                         <Link
@@ -417,7 +434,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)' }}
                     aria-label="Open account menu"
                   >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold" style={{ background: 'linear-gradient(135deg, #22d3ee, #6366f1)', color: '#06111d', boxShadow: '0 0 28px rgba(34,211,238,0.22)' }}>
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold text-white shadow-[var(--shadow-glow)]" style={{ background: 'var(--brand-gradient)' }}>
                       {initials}
                     </div>
                   </button>
@@ -438,15 +455,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             type="button"
             onClick={() => setMobileNavOpen(false)}
             className="absolute inset-0 bg-black/60"
+            style={{ background: 'var(--bg-overlay)' }}
             aria-label="Close navigation overlay"
           />
           <div
             className="absolute inset-y-0 left-0 flex w-[290px] flex-col border-r px-3 py-4"
             style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
           >
-            <div className="mb-6 flex items-center justify-between gap-3 px-2">
+            <div className="flex items-center justify-between gap-3 px-2">
               <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl text-lg font-semibold" style={{ background: 'linear-gradient(135deg, #22d3ee, #6366f1)', color: '#06111d', boxShadow: '0 0 28px rgba(34,211,238,0.22)' }}>
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl text-lg font-semibold text-white shadow-[var(--shadow-glow)]" style={{ background: 'var(--brand-gradient)' }}>
                   A
                 </div>
                 <div className="min-w-0">
@@ -464,6 +482,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <CloseIcon />
               </button>
             </div>
+
+            <div className="my-5 border-t" style={{ borderColor: 'var(--border-subtle)' }} />
 
             <nav className="flex-1 space-y-1">
               {NAV_ITEMS.map((item) => {
@@ -483,7 +503,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   >
                     <div
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition"
-                      style={{ background: active ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)' }}
+                      style={{ background: active ? 'var(--accent-soft)' : 'var(--icon-tile)' }}
                     >
                       <Icon active={active} />
                     </div>
@@ -499,7 +519,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="text-sm font-semibold text-[var(--text-primary)]">{user?.name || 'Your account'}</div>
               <div className="mt-1 text-xs text-[var(--text-dim)]">{user?.email || 'Manage workspace access'}</div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Link href="/profile" className="app-button-secondary px-3 py-2 text-xs">Profile</Link>
+                <Link href="/settings?tab=profile" className="app-button-secondary px-3 py-2 text-xs">Profile</Link>
+                <Link href="/settings?tab=billing" className="app-button-secondary px-3 py-2 text-xs">Billing</Link>
                 <Link href="/settings" className="app-button-secondary px-3 py-2 text-xs">Settings</Link>
                 <button type="button" onClick={handleLogout} className="app-button-secondary px-3 py-2 text-xs">Logout</button>
               </div>
@@ -560,6 +581,13 @@ function HistoryIcon({ active }: { active: boolean | undefined }) {
     active,
     <path d="M8 2a6 6 0 106 6h-1.5A4.5 4.5 0 118 3.5V1l3 2.5L8 6V4.5A3.5 3.5 0 1011.5 8H8V2z" />
   );
+}
+
+function JobsIcon({ active }: { active: boolean | undefined }) {
+  return iconShell(
+    active,
+    <path d="M5 5V4a2 2 0 012-2h2a2 2 0 012 2v1h1.5A1.5 1.5 0 0114 6.5v5A1.5 1.5 0 0112.5 13h-9A1.5 1.5 0 012 11.5v-5A1.5 1.5 0 013.5 5H5zm1.5 0h3V4a.5.5 0 00-.5-.5H7a.5.5 0 00-.5.5v1zM2.8 8.2h10.4M7 9h2" />
+  , true);
 }
 
 function AnalysisIcon({ active }: { active: boolean | undefined }) {

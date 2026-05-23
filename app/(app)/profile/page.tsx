@@ -1,8 +1,11 @@
 'use client';
 
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { api, type Education, type Experience, type FullProfile, type Project } from '@/lib/api';
+
+type VerificationChannel = 'email' | 'phone';
 
 type ProfileForm = {
   name: string;
@@ -61,6 +64,8 @@ export default function ProfilePage() {
   const [confirmingPhoneOtp, setConfirmingPhoneOtp] = useState(false);
   const [emailOtp, setEmailOtp] = useState('');
   const [phoneOtp, setPhoneOtp] = useState('');
+  const [verificationModal, setVerificationModal] = useState<VerificationChannel | null>(null);
+  const [pendingVerificationChannels, setPendingVerificationChannels] = useState<VerificationChannel[]>([]);
   const [form, setForm] = useState<ProfileForm>({
     name: '',
     email: '',
@@ -126,75 +131,113 @@ export default function ProfilePage() {
   }, [form]);
   const completionPercent = useMemo(() => clampProgress(completion), [completion]);
   const completionColor = useMemo(() => getProgressColor(completionPercent), [completionPercent]);
+  const emailVerifiedForCurrentValue = Boolean(
+    form.email.trim() &&
+    profile?.email_verified_at &&
+    form.email.trim() === (profile?.email || '').trim()
+  );
+  const phoneVerifiedForCurrentValue = Boolean(
+    form.phone.trim() &&
+    profile?.phone_verified_at &&
+    form.phone.trim() === (profile?.phone || '').trim()
+  );
 
   async function save() {
     setSaving(true);
     try {
-      const normalizedLocation = normalizeCityCountry(form.location);
-      if (!isCityCountryFormat(normalizedLocation)) {
-        throw new Error('Please choose a valid location in "City, Country" format.');
-      }
+      const nextEmail = form.email.trim();
+      const nextPhone = form.phone.trim();
 
-      const updated = await api.profile.update({
-        name: form.name.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim(),
-        location: normalizedLocation,
-        linkedin: form.linkedin.trim(),
-        github: form.github.trim(),
-        website: form.website.trim(),
-        summary: form.summary.trim(),
-        technicalSkills: splitList(form.technicalSkills),
-        softSkills: splitList(form.softSkills),
-        achievements: splitList(form.achievements),
-        languages: splitList(form.languages),
-        hobbies: splitList(form.hobbies),
-        education: form.education
-          .filter((item) => item.degree?.trim() || item.institution?.trim() || item.year?.trim())
-          .map((item, index) => ({
-            ...item,
-            degree: item.degree.trim(),
-            institution: item.institution.trim(),
-            field: item.field?.trim(),
-            year: item.year.trim(),
-            gpa: item.gpa?.trim(),
-            sort_order: index,
-          })),
-        projects: form.projects
-          .filter((item) => item.name?.trim() || item.description?.trim())
-          .map((item, index) => ({
-            ...item,
-            name: item.name.trim(),
-            tech_stack: item.tech_stack?.trim(),
-            url: item.url?.trim(),
-            description: item.description.trim(),
-            sort_order: index,
-          })),
-        experiences: form.experiences
-          .filter((item) => item.job_title?.trim() || item.company?.trim())
-          .map((item, index) => ({
-            ...item,
-            job_title: item.job_title.trim(),
-            company: item.company.trim(),
-            location: item.location?.trim(),
-            start_date: item.start_date.trim(),
-            end_date: item.is_current ? getTodayDateValue() : item.end_date?.trim(),
-            bullets: item.bullets.map((bullet) => bullet.trim()).filter(Boolean),
-            sort_order: index,
-          })),
-      });
+      const updated = await api.profile.update(buildProfilePayload());
 
       setProfile(updated);
       setForm((current) => ({
         ...current,
         name: updated.name || '',
         email: updated.email || '',
+        phone: updated.phone || '',
       }));
       toast.success('Profile saved.');
+
+      const channels: VerificationChannel[] = [];
+      if (nextEmail && !updated.email_verified_at) channels.push('email');
+      if (nextPhone && !updated.phone_verified_at) channels.push('phone');
+
+      if (channels.length > 0) {
+        setPendingVerificationChannels(channels);
+        await openVerificationModal(channels[0]);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to save your profile right now.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  function buildProfilePayload(): Partial<FullProfile> {
+    const normalizedLocation = normalizeCityCountry(form.location);
+    if (!isCityCountryFormat(normalizedLocation)) {
+      throw new Error('Please choose a valid location in "City, Country" format.');
+    }
+
+    return {
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+      location: normalizedLocation,
+      linkedin: form.linkedin.trim(),
+      github: form.github.trim(),
+      website: form.website.trim(),
+      summary: form.summary.trim(),
+      technicalSkills: splitList(form.technicalSkills),
+      softSkills: splitList(form.softSkills),
+      achievements: splitList(form.achievements),
+      languages: splitList(form.languages),
+      hobbies: splitList(form.hobbies),
+      education: form.education
+        .filter((item) => item.degree?.trim() || item.institution?.trim() || item.year?.trim())
+        .map((item, index) => ({
+          ...item,
+          degree: item.degree.trim(),
+          institution: item.institution.trim(),
+          field: item.field?.trim(),
+          year: item.year.trim(),
+          gpa: item.gpa?.trim(),
+          sort_order: index,
+        })),
+      projects: form.projects
+        .filter((item) => item.name?.trim() || item.description?.trim())
+        .map((item, index) => ({
+          ...item,
+          name: item.name.trim(),
+          tech_stack: item.tech_stack?.trim(),
+          url: item.url?.trim(),
+          description: item.description.trim(),
+          sort_order: index,
+        })),
+      experiences: form.experiences
+        .filter((item) => item.job_title?.trim() || item.company?.trim())
+        .map((item, index) => ({
+          ...item,
+          job_title: item.job_title.trim(),
+          company: item.company.trim(),
+          location: item.location?.trim(),
+          start_date: item.start_date.trim(),
+          end_date: item.is_current ? getTodayDateValue() : item.end_date?.trim(),
+          bullets: item.bullets.map((bullet) => bullet.trim()).filter(Boolean),
+          sort_order: index,
+        })),
+    };
+  }
+
+  async function openVerificationModal(channel: VerificationChannel) {
+    setVerificationModal(channel);
+    if (channel === 'email') {
+      setEmailOtp('');
+      await sendEmailOtp();
+    } else {
+      setPhoneOtp('');
+      await sendPhoneOtp();
     }
   }
 
@@ -221,6 +264,7 @@ export default function ProfilePage() {
       }));
       setEmailOtp('');
       toast.success('Email verified.');
+      await continuePendingVerification('email');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to confirm email OTP.');
     } finally {
@@ -245,13 +289,30 @@ export default function ProfilePage() {
     try {
       const updated = await api.profile.confirmPhoneOtp(phoneOtp.trim());
       setProfile(updated);
+      setForm((current) => ({
+        ...current,
+        phone: updated.phone || current.phone,
+      }));
       setPhoneOtp('');
       toast.success('Phone verified.');
+      await continuePendingVerification('phone');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to confirm phone OTP.');
     } finally {
       setConfirmingPhoneOtp(false);
     }
+  }
+
+  async function continuePendingVerification(completedChannel: VerificationChannel) {
+    const remainingChannels = pendingVerificationChannels.filter((channel) => channel !== completedChannel);
+    setPendingVerificationChannels(remainingChannels);
+
+    if (remainingChannels.length > 0) {
+      await openVerificationModal(remainingChannels[0]);
+      return;
+    }
+
+    setVerificationModal(null);
   }
 
   if (loading) {
@@ -265,7 +326,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px]">
+    <>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px]">
       <section className="space-y-6">
         <div className="app-panel p-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -300,27 +362,32 @@ export default function ProfilePage() {
                   />
                 </Field>
                 <Field label="Email">
-                  <input
-                    value={form.email}
-                    readOnly={Boolean(profile?.email_verified_at)}
-                    onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-                    className={`input-shell ${profile?.email_verified_at ? 'cursor-not-allowed opacity-80' : ''}`}
-                  />
+                  <div className="relative">
+                    <input
+                      value={form.email}
+                      onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                      className="input-shell pr-12"
+                    />
+                    <ContactStatusIcon verified={emailVerifiedForCurrentValue} />
+                  </div>
                   <FieldNote>
-                    {profile?.email_verified_at
-                      ? `Verified on ${formatTimestamp(profile.email_verified_at)}`
-                      : 'Email is unverified, so you can still edit it before verification.'}
+                    {emailVerifiedForCurrentValue && profile?.email_verified_at
+                      ? `Verified on ${formatTimestamp(profile.email_verified_at)}. Changing it will require OTP verification again.`
+                      : 'Email needs verification after any update.'}
                   </FieldNote>
                 </Field>
                 <Field label="Phone">
-                  <input
-                    value={form.phone}
-                    onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
-                    placeholder="+91 98765 43210"
-                    className="input-shell"
-                  />
+                  <div className="relative">
+                    <input
+                      value={form.phone}
+                      onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                      placeholder="+91 98765 43210"
+                      className="input-shell pr-12"
+                    />
+                    <ContactStatusIcon verified={phoneVerifiedForCurrentValue} />
+                  </div>
                   <FieldNote>
-                    {profile?.phone_verified_at ? `Verified on ${formatTimestamp(profile.phone_verified_at)}` : 'Phone needs verification after any update.'}
+                    {phoneVerifiedForCurrentValue && profile?.phone_verified_at ? `Verified on ${formatTimestamp(profile.phone_verified_at)}` : 'Phone needs verification after any update.'}
                   </FieldNote>
                 </Field>
                 <Field label="Location">
@@ -673,7 +740,7 @@ export default function ProfilePage() {
             />
           </div>
           <p className="mt-4 text-xs leading-5 text-[var(--text-dim)]">
-            Save profile changes first, then use these inbox actions to verify the latest email and phone values.
+            Changing email or phone and saving opens a verification popup automatically. You can also verify from here.
           </p>
         </div>
 
@@ -696,7 +763,21 @@ export default function ProfilePage() {
           </div>
         </div>
       </aside>
-    </div>
+      </div>
+      {verificationModal && (
+        <ContactVerificationModal
+          channel={verificationModal}
+          value={verificationModal === 'email' ? form.email : form.phone}
+          otpValue={verificationModal === 'email' ? emailOtp : phoneOtp}
+          onOtpChange={verificationModal === 'email' ? setEmailOtp : setPhoneOtp}
+          onResend={verificationModal === 'email' ? sendEmailOtp : sendPhoneOtp}
+          onConfirm={verificationModal === 'email' ? confirmEmailOtp : confirmPhoneOtp}
+          onClose={() => setVerificationModal(null)}
+          sending={verificationModal === 'email' ? sendingEmailOtp : sendingPhoneOtp}
+          confirming={verificationModal === 'email' ? confirmingEmailOtp : confirmingPhoneOtp}
+        />
+      )}
+    </>
   );
 
   function updateEducation(index: number, field: keyof Education, value: string) {
@@ -872,6 +953,102 @@ function VerificationRow({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ContactStatusIcon({ verified }: { verified: boolean }) {
+  const Icon = verified ? CheckCircle2 : XCircle;
+
+  return (
+    <span
+      className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 ${
+        verified ? 'text-emerald-600' : 'text-rose-600'
+      }`}
+      title={verified ? 'Verified' : 'Not verified'}
+      aria-hidden="true"
+    >
+      <Icon className="h-5 w-5" strokeWidth={2.4} />
+    </span>
+  );
+}
+
+function ContactVerificationModal({
+  channel,
+  value,
+  otpValue,
+  onOtpChange,
+  onResend,
+  onConfirm,
+  onClose,
+  sending,
+  confirming,
+}: {
+  channel: VerificationChannel;
+  value: string;
+  otpValue: string;
+  onOtpChange: (value: string) => void;
+  onResend: () => void;
+  onConfirm: () => void;
+  onClose: () => void;
+  sending: boolean;
+  confirming: boolean;
+}) {
+  const label = channel === 'email' ? 'email address' : 'phone number';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+      <button
+        type="button"
+        className="absolute inset-0 bg-[var(--bg-overlay)]"
+        onClick={onClose}
+        aria-label="Close verification popup"
+      />
+      <div className="relative w-full max-w-md rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--bg-panel-strong)] p-6 shadow-[var(--shadow-panel)]">
+        <div className="app-eyebrow">Verification required</div>
+        <h3 className="app-subheading mt-2">Verify your {label}</h3>
+        <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
+          We sent a 6-digit OTP to <span className="font-semibold text-[var(--text-primary)]">{value}</span>. Enter it below to finish updating your profile.
+        </p>
+
+        <div className="mt-5">
+          <label className="block">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">OTP code</span>
+            <input
+              value={otpValue}
+              onChange={(event) => onOtpChange(event.target.value)}
+              placeholder="Enter 6-digit OTP"
+              inputMode="numeric"
+              maxLength={6}
+              className="input-shell"
+            />
+          </label>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onResend}
+            disabled={sending}
+            className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {sending ? 'Sending...' : 'Resend OTP'}
+          </button>
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="app-button-secondary">
+              Later
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={!otpValue.trim() || confirming}
+              className="app-button-primary disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {confirming ? 'Verifying...' : 'Verify'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

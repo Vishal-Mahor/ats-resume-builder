@@ -11,6 +11,7 @@ type AuthUser = {
   name: string;
   avatar_url?: string;
   plan?: string;
+  created_at?: string;
 };
 
 const OTP_TTL_MINUTES = 10;
@@ -261,7 +262,7 @@ export async function getUserById(userId: string) {
   const {
     rows: [user],
   } = await db.query<AuthUser>(
-    'SELECT id, email, name, avatar_url, plan FROM users WHERE id=$1',
+    'SELECT id, email, name, avatar_url, plan, created_at FROM users WHERE id=$1',
     [userId]
   );
 
@@ -270,4 +271,20 @@ export async function getUserById(userId: string) {
   }
 
   return user;
+}
+
+export async function changePassword(userId: string, password: string) {
+  const hash = await bcrypt.hash(password, 12);
+  await db.query(
+    `UPDATE users
+     SET password_hash=$2,
+         provider='email',
+         updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id=$1`,
+    [userId, hash]
+  );
+}
+
+export async function deleteUserAccount(userId: string) {
+  await db.query('DELETE FROM users WHERE id=$1', [userId]);
 }

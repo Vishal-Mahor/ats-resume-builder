@@ -227,9 +227,25 @@ CREATE TABLE IF NOT EXISTS resumes (
   missing_keywords  TEXT DEFAULT '[]',
   suggestions       TEXT DEFAULT '[]',
   status            TEXT NOT NULL DEFAULT 'draft',
+  sort_order        INTEGER,
   created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes(user_id);
 CREATE INDEX IF NOT EXISTS idx_resumes_created_at ON resumes(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_resumes_company ON resumes(user_id, company_name);
+
+CREATE TABLE IF NOT EXISTS job_applications (
+  id               TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  company_name     TEXT NOT NULL,
+  job_title        TEXT NOT NULL,
+  location         TEXT,
+  source_platform  TEXT NOT NULL DEFAULT 'manual',
+  status           TEXT NOT NULL DEFAULT 'saved',
+  application_link TEXT,
+  sort_order       INTEGER,
+  created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_job_applications_user_created ON job_applications(user_id, created_at DESC);
