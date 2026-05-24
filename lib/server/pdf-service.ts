@@ -3,6 +3,7 @@ import {
   A4_PAGE_PADDING_X,
   A4_PAGE_PADDING_Y,
   DEFAULT_RESUME_FORMATTING,
+  ensureHref,
   type ResumeMeta,
   formatDateRange,
   getContactItems,
@@ -64,7 +65,8 @@ function buildResumeHtml(meta: UserMeta, content: ResumeContent, settings?: Resu
     padding-bottom: 10px;
     margin-bottom: 14px;
   }
-  .contact a { color: #444; text-decoration: none; }
+  .contact a, .contact span { color: #444; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+  .contact svg { width: 10px; height: 10px; }
   .section-title {
     font-family: Arial, sans-serif;
     font-size: 9.5pt;
@@ -132,8 +134,8 @@ ${pages.map((blocks, pageIndex) => `
     <h1 class="name">${escapeHtml(meta.name)}</h1>
     <div class="contact">
       ${contactItems.map((item) => item.href
-        ? `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`
-        : `<span>${escapeHtml(item.label)}</span>`).join('')}
+        ? `<a href="${escapeHtml(item.href)}">${item.icon ? getContactIconSvg(item.icon) : ''}${escapeHtml(item.label)}</a>`
+        : `<span>${item.icon ? getContactIconSvg(item.icon) : ''}${escapeHtml(item.label)}</span>`).join('')}
     </div>
     ${blocks.map((block) => {
       if (block.type === 'summary') {
@@ -167,7 +169,12 @@ ${pages.map((blocks, pageIndex) => `
           <div class="entry">
             <div class="entry-header">
               <span class="entry-title">${escapeHtml(block.item.name)}</span>
-              <span class="entry-sub-inline">${escapeHtml(block.item.tech_stack)}</span>
+              <span class="entry-sub-inline">
+                ${escapeHtml(block.item.tech_stack)}
+                ${block.item.url
+                  ? `${block.item.tech_stack ? ' | ' : ''}<a href="${escapeHtml(ensureHref(block.item.url))}">${escapeHtml(block.item.url)}</a>`
+                  : ''}
+              </span>
             </div>
             ${block.item.summary ? `<p class="project-summary">${escapeHtml(block.item.summary)}</p>` : ''}
             <ul>${(block.item.bullets || []).map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join('')}</ul>
@@ -205,6 +212,30 @@ function escapeHtml(value: string) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function getContactIconSvg(icon: 'email' | 'phone' | 'location' | 'linkedin' | 'github' | 'portfolio') {
+  if (icon === 'email') {
+    return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-10 6L2 7"/></svg>';
+  }
+
+  if (icon === 'phone') {
+    return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.35 1.9.66 2.81a2 2 0 0 1-.45 2.11L8.05 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.31 1.85.53 2.81.66A2 2 0 0 1 22 16.92Z"/></svg>';
+  }
+
+  if (icon === 'location') {
+    return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
+  }
+
+  if (icon === 'github') {
+    return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.1-1.46-1.1-1.46-.91-.62.06-.61.06-.61 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.56 9.56 0 0 1 12 6.01c.85 0 1.7.11 2.5.34 1.9-1.29 2.74-1.02 2.74-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.86v2.76c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>';
+  }
+
+  if (icon === 'linkedin') {
+    return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M5.34 8.96H2.67V21h2.67V8.96ZM4 3a1.55 1.55 0 1 0 0 3.1A1.55 1.55 0 0 0 4 3Zm17.33 11.1c0-3.23-1.72-5.36-4.51-5.36-1.3 0-2.24.72-2.63 1.4h-.04V8.96h-2.56V21h2.67v-5.96c0-1.57.3-3.08 2.24-3.08 1.9 0 1.93 1.78 1.93 3.18V21h2.67v-6.9h.23Z"/></svg>';
+  }
+
+  return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 0 20"/><path d="M12 2a15.3 15.3 0 0 0 0 20"/></svg>';
 }
 
 export async function generateResumePdf(meta: UserMeta, content: ResumeContent, settings?: ResumeSettings) {

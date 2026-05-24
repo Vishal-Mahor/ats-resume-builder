@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/server/db';
 import { requireAuthUserId } from '@/lib/server/auth-token';
-import { handleRouteError } from '@/lib/server/http';
+import { handleRouteError, HttpError } from '@/lib/server/http';
 
 export const runtime = 'nodejs';
 
@@ -19,6 +19,11 @@ const statusUpdateSchema = z.object({
   id: z.string().trim().min(1),
   source: z.enum(['resume', 'manual']),
   status: z.string().trim().min(1).max(40),
+});
+
+const deleteSchema = z.object({
+  id: z.string().trim().min(1),
+  source: z.enum(['resume', 'manual']),
 });
 
 const reorderSchema = z.object({
@@ -213,6 +218,23 @@ export async function PATCH(request: Request) {
     }
 
     return NextResponse.json(job);
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const userId = requireAuthUserId(request);
+    const body = deleteSchema.parse(await request.json());
+    const table = body.source === 'resume' ? 'resumes' : 'job_applications';
+    const { rowCount } = await db.query(`DELETE FROM ${table} WHERE id=$1 AND user_id=$2`, [body.id, userId]);
+
+    if (!rowCount) {
+      throw new HttpError(404, 'Job not found');
+    }
+
+    return new Response(null, { status: 204 });
   } catch (error) {
     return handleRouteError(error);
   }

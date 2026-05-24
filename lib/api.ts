@@ -98,11 +98,12 @@ async function request<T>(
   retryOnAuthFailure = true
 ): Promise<T> {
   const token = await getToken();
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const res = await fetch(`${getApiBase()}${path}`, {
     ...options,
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
@@ -240,11 +241,26 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ items }),
       }),
+    delete: (input: { id: string; source: JobApplication['source'] }) =>
+      request<void>('/api/jobs', {
+        method: 'DELETE',
+        body: JSON.stringify(input),
+      }),
   },
 
   // ─── Resumes ────────────────────────────────────────────
   resumes: {
     list:   () => request<ResumeSummary[]>('/api/resumes'),
+    create: (data: CreateResumeInput) =>
+      request<ResumeSummary>('/api/resumes', { method: 'POST', body: JSON.stringify(data) }),
+    import: (data: ImportResumeInput) => {
+      const form = new FormData();
+      form.set('resume_name', data.resume_name);
+      form.set('job_title', data.job_title);
+      form.set('template_id', data.template_id);
+      form.set('file', data.file);
+      return request<ResumeSummary>('/api/resumes/import', { method: 'POST', body: form });
+    },
     stats:  () => request<ResumeStats>('/api/resumes/stats'),
     get:    (id: string) => request<Resume>(`/api/resumes/${id}`),
     update: (id: string, data: Partial<Resume>) =>
@@ -256,6 +272,11 @@ export const api = {
       }),
     aiImprove: (id: string, payload: { resume_content: ResumeContent; focus_text?: string }) =>
       request<AiImproveResult>(`/api/resumes/${id}/ai-improve`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    chat: (id: string, payload: { message: string; resume_content: ResumeContent }) =>
+      request<ResumeChatResult>(`/api/resumes/${id}/chat`, {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
@@ -348,7 +369,7 @@ export interface ResumeSettings {
     summaryMaxWords: number;
     maxBulletsPerSection: number;
     skillsSeparator: 'comma' | 'bullet';
-    linkStyle: 'compact' | 'full';
+    linkStyle: 'compact' | 'full' | 'icons';
     pageSize: 'A4' | 'Letter';
     repeatSectionHeadingsOnNewPage: boolean;
     showPageNumbers: boolean;
@@ -390,7 +411,25 @@ export interface Education {
 export interface ResumeSummary {
   id: string; company_name: string; job_title: string; ats_score: number;
   source_platform?: string; template_id?: string; status: string; created_at: string;
+  updated_at?: string;
   location?: string;
+  resume_content?: ResumeContent;
+}
+
+export interface CreateResumeInput {
+  resume_name: string;
+  job_title: string;
+  template_id: string;
+  source_platform?: string;
+  use_profile?: boolean;
+  resume_content?: ResumeContent;
+}
+
+export interface ImportResumeInput {
+  resume_name: string;
+  job_title: string;
+  template_id: string;
+  file: File;
 }
 
 export interface ResumeStats {
@@ -504,6 +543,11 @@ export interface ResumeContent {
 }
 
 export interface ResumeSkills {
+  categories?: Array<{
+    id: string;
+    label: string;
+    skills: string[];
+  }>;
   technical:
     | string[]
     | {
@@ -614,6 +658,13 @@ export interface AtsRefreshResult {
   matchedKeywords: string[];
   missingKeywords: string[];
   suggestions: Suggestion[];
+}
+
+export interface ResumeChatResult {
+  allowed: boolean;
+  reply: string;
+  changes: string[];
+  resume_content?: ResumeContent;
 }
 
 export interface AiImproveResult {

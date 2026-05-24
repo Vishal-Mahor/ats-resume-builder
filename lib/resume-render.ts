@@ -37,6 +37,14 @@ export type ResumeSkillGroup = {
   type: 'technical' | 'soft';
 };
 
+export type ResumeContactIcon = 'email' | 'phone' | 'location' | 'linkedin' | 'github' | 'portfolio';
+
+export type ResumeContactItem = {
+  label: string;
+  href?: string;
+  icon?: ResumeContactIcon;
+};
+
 type BaseBlock = {
   key: string;
   sectionKey: keyof NonNullable<ResumeContent['section_visibility']>;
@@ -135,6 +143,16 @@ function buildEducationBullets(item: ResumeContent['education'][number]) {
 export function getResumeSkillGroups(skills: ResumeSkills | undefined): ResumeSkillGroup[] {
   if (!skills) return [];
 
+  if (Object.prototype.hasOwnProperty.call(skills, 'categories')) {
+    return (skills.categories ?? [])
+      .map((category) => ({
+        label: category.label,
+        values: category.skills,
+        type: 'technical' as const,
+      }))
+      .filter((group) => group.label.trim() && group.values.length > 0);
+  }
+
   if (Array.isArray(skills.technical)) {
     const groups: ResumeSkillGroup[] = [
       { label: 'Technical', values: skills.technical, type: 'technical' },
@@ -161,18 +179,20 @@ export function getResumeSkillGroups(skills: ResumeSkills | undefined): ResumeSk
 }
 
 export function getContactItems(meta: ResumeMeta, settings?: ResumeSettings) {
-  const compactLinks = (settings?.formatting.linkStyle ?? DEFAULT_RESUME_FORMATTING.linkStyle) === 'compact';
-  const items: Array<{ label: string; href?: string }> = [];
-  if (meta.email) items.push({ label: meta.email, href: `mailto:${meta.email}` });
-  if (meta.phone) items.push({ label: meta.phone, href: `tel:${meta.phone.replace(/\s+/g, '')}` });
-  if (meta.linkedin) items.push({ label: compactLinks ? 'LinkedIn' : meta.linkedin, href: ensureHref(meta.linkedin) });
-  if (meta.github) items.push({ label: compactLinks ? 'GitHub' : meta.github, href: ensureHref(meta.github) });
-  if (meta.website) items.push({ label: compactLinks ? 'Portfolio' : meta.website, href: ensureHref(meta.website) });
-  if (meta.location) items.push({ label: meta.location });
+  const linkStyle = settings?.formatting.linkStyle ?? DEFAULT_RESUME_FORMATTING.linkStyle;
+  const compactLinks = linkStyle === 'compact';
+  const iconLinks = linkStyle === 'icons';
+  const items: ResumeContactItem[] = [];
+  if (meta.email) items.push({ label: compactLinks ? 'Email' : iconLinks ? meta.email : `Email: ${meta.email}`, href: `mailto:${meta.email}`, icon: iconLinks ? 'email' : undefined });
+  if (meta.phone) items.push({ label: compactLinks ? 'Phone' : iconLinks ? meta.phone : `Phone: ${meta.phone}`, href: `tel:${meta.phone.replace(/\s+/g, '')}`, icon: iconLinks ? 'phone' : undefined });
+  if (meta.linkedin) items.push({ label: compactLinks ? 'LinkedIn' : iconLinks ? meta.linkedin : `LinkedIn: ${meta.linkedin}`, href: ensureHref(meta.linkedin), icon: iconLinks ? 'linkedin' : undefined });
+  if (meta.github) items.push({ label: compactLinks ? 'GitHub' : iconLinks ? meta.github : `GitHub: ${meta.github}`, href: ensureHref(meta.github), icon: iconLinks ? 'github' : undefined });
+  if (meta.website) items.push({ label: compactLinks ? 'Portfolio' : iconLinks ? meta.website : `Portfolio: ${meta.website}`, href: ensureHref(meta.website), icon: iconLinks ? 'portfolio' : undefined });
+  if (meta.location) items.push({ label: compactLinks ? 'Location' : iconLinks ? meta.location : `Location: ${meta.location}`, icon: iconLinks ? 'location' : undefined });
   return items;
 }
 
-function ensureHref(value: string) {
+export function ensureHref(value: string) {
   return /^https?:\/\//i.test(value) ? value : `https://${value}`;
 }
 

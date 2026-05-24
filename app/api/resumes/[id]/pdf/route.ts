@@ -18,7 +18,7 @@ export async function GET(request: Request, context: RouteContext) {
     const {
       rows: [resume],
     } = await db.query(
-      `SELECT r.*, u.name, u.email, u.email_verified_at, p.phone, p.phone_verified_at, p.location, p.linkedin, p.github
+      `SELECT r.*, u.name, u.email, u.email_verified_at, p.phone, p.phone_verified_at, p.location, p.linkedin, p.github, p.website
        FROM resumes r
        JOIN users u ON u.id = r.user_id
        LEFT JOIN profiles p ON p.user_id = r.user_id
@@ -46,6 +46,7 @@ export async function GET(request: Request, context: RouteContext) {
         location: resume.location,
         linkedin: resume.linkedin,
         github: resume.github,
+        website: resume.website,
       },
       resume.resume_content,
       userSettings.resume

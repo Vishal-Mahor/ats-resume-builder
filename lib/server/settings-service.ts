@@ -51,7 +51,7 @@ export const userSettingsInputSchema = z.object({
       summaryMaxWords: z.number().int().min(10).max(80),
       maxBulletsPerSection: z.number().int().min(1).max(10),
       skillsSeparator: z.enum(['comma', 'bullet']),
-      linkStyle: z.enum(['compact', 'full']),
+      linkStyle: z.enum(['compact', 'full', 'icons']),
       pageSize: z.enum(['A4', 'Letter']),
       repeatSectionHeadingsOnNewPage: z.boolean(),
       showPageNumbers: z.boolean(),

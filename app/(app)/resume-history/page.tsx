@@ -24,7 +24,7 @@ const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
 ] as const;
 
-const JOB_GRID_COLUMNS = '44px minmax(120px,1fr) minmax(160px,1.35fr) minmax(110px,0.95fr) minmax(90px,0.75fr) minmax(105px,0.8fr) minmax(130px,0.95fr) minmax(100px,0.8fr) minmax(95px,0.75fr)';
+const JOB_GRID_COLUMNS = '44px minmax(120px,1fr) minmax(160px,1.35fr) minmax(110px,0.95fr) minmax(90px,0.75fr) minmax(105px,0.8fr) minmax(130px,0.95fr) minmax(100px,0.8fr) minmax(150px,0.95fr)';
 
 export default function ResumeHistoryPage() {
   const [jobs, setJobs] = useState<JobApplication[]>([]);
@@ -41,6 +41,7 @@ export default function ResumeHistoryPage() {
   const [addJobOpen, setAddJobOpen] = useState(false);
   const [addingJob, setAddingJob] = useState(false);
   const [savingStatusKey, setSavingStatusKey] = useState<string | null>(null);
+  const [deletingJobKey, setDeletingJobKey] = useState<string | null>(null);
   const [draggedJobKey, setDraggedJobKey] = useState<string | null>(null);
   const [dragOverJobKey, setDragOverJobKey] = useState<string | null>(null);
   const [jobForm, setJobForm] = useState({
@@ -161,6 +162,33 @@ export default function ResumeHistoryPage() {
       toast.error(error instanceof Error ? error.message : 'Failed to update status.');
     } finally {
       setSavingStatusKey(null);
+    }
+  }
+
+  async function handleDeleteJob(job: JobApplication) {
+    const key = getJobKey(job);
+    const confirmed = window.confirm(
+      job.source === 'resume'
+        ? `Delete the generated resume for ${job.job_title} at ${job.company_name}? This removes it from your resume history too.`
+        : `Delete ${job.job_title} at ${job.company_name} from your jobs?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const previousJobs = jobs;
+    setDeletingJobKey(key);
+    setJobs((current) => current.filter((item) => getJobKey(item) !== key));
+
+    try {
+      await api.jobs.delete({ id: job.id, source: job.source });
+      toast.success('Job deleted.');
+    } catch (error) {
+      setJobs(previousJobs);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete job.');
+    } finally {
+      setDeletingJobKey(null);
     }
   }
 
@@ -360,17 +388,27 @@ export default function ResumeHistoryPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {job.resume_id ? (
+                      <div className="flex min-w-0 flex-wrap gap-2">
+                        {job.resume_id ? (
+                          <button
+                            type="button"
+                            onClick={() => handlePreview(job.resume_id as string)}
+                            className="app-button-secondary px-3 py-2 text-xs font-semibold"
+                          >
+                            Preview
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          onClick={() => handlePreview(job.resume_id as string)}
-                          className="app-button-secondary min-w-[82px] px-3 py-2 text-xs font-semibold"
+                          onClick={() => handleDeleteJob(job)}
+                          disabled={deletingJobKey === getJobKey(job)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-500 bg-red-500 px-3 py-2 text-xs font-semibold text-white transition hover:border-red-400 hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+                          aria-label={`Delete ${job.job_title} at ${job.company_name}`}
                         >
-                          Preview
+                          <TrashIcon />
+                          {deletingJobKey === getJobKey(job) ? 'Deleting' : 'Delete'}
                         </button>
-                      ) : (
-                        <span className="text-[var(--text-dim)]">Manual</span>
-                      )}
+                      </div>
                     </TableCell>
                   </div>
                 ))}
@@ -537,6 +575,16 @@ function DragHandleIcon() {
       <circle cx="11" cy="4" r="1" />
       <circle cx="11" cy="8" r="1" />
       <circle cx="11" cy="12" r="1" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M3.5 4.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M6.5 2.75h3l.5 1.75H6l.5-1.75Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M5 6.25v6.25c0 .6.4 1 1 1h4c.6 0 1-.4 1-1V6.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }

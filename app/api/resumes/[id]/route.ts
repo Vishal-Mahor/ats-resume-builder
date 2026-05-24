@@ -32,6 +32,8 @@ export async function PUT(request: Request, context: RouteContext) {
     const userId = requireAuthUserId(request);
     const { id } = await context.params;
     const body = (await request.json()) as {
+      company_name?: string;
+      job_title?: string;
       resume_content?: unknown;
       cover_letter?: string;
       status?: string;
@@ -45,23 +47,27 @@ export async function PUT(request: Request, context: RouteContext) {
       rows: [resume],
     } = await db.query(
       `UPDATE resumes SET
-         resume_content = COALESCE($1, resume_content),
-         cover_letter   = COALESCE($2, cover_letter),
-         status         = COALESCE($3, status),
-         ats_score      = COALESCE($4, ats_score),
-         matched_keywords = COALESCE($5, matched_keywords),
-         missing_keywords = COALESCE($6, missing_keywords),
-         suggestions      = COALESCE($7, suggestions),
+         company_name   = COALESCE($1, company_name),
+         job_title      = COALESCE($2, job_title),
+         resume_content = COALESCE($3, resume_content),
+         cover_letter   = COALESCE($4, cover_letter),
+         status         = COALESCE($5, status),
+         ats_score      = COALESCE($6, ats_score),
+         matched_keywords = COALESCE($7, matched_keywords),
+         missing_keywords = COALESCE($8, missing_keywords),
+         suggestions      = COALESCE($9, suggestions),
          updated_at     = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-       WHERE id=$8 AND user_id=$9 RETURNING *`,
+       WHERE id=$10 AND user_id=$11 RETURNING *`,
       [
-        body.resume_content ? JSON.stringify(body.resume_content) : null,
+        body.company_name?.trim() || null,
+        body.job_title?.trim() || null,
+        body.resume_content !== undefined ? JSON.stringify(body.resume_content) : null,
         body.cover_letter,
         body.status,
         body.ats_score ?? null,
-        body.matched_keywords ? JSON.stringify(body.matched_keywords) : null,
-        body.missing_keywords ? JSON.stringify(body.missing_keywords) : null,
-        body.suggestions ? JSON.stringify(body.suggestions) : null,
+        body.matched_keywords !== undefined ? JSON.stringify(body.matched_keywords) : null,
+        body.missing_keywords !== undefined ? JSON.stringify(body.missing_keywords) : null,
+        body.suggestions !== undefined ? JSON.stringify(body.suggestions) : null,
         id,
         userId,
       ]

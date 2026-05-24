@@ -9,17 +9,14 @@ import {
   type FullProfile,
   type Resume,
   type ResumeContent,
+  type ResumeSkills,
   type Suggestion,
   type UserSettings,
 } from '@/lib/api';
 import {
-  addSkillToResumeSkills,
   normalizeResumeSkills,
-  removeSkillFromResumeSkills,
-  type NormalizedResumeSkills,
 } from '@/lib/skill-taxonomy';
 
-type PreviewTab = 'resume' | 'cover';
 type SuggestionSource = 'missing' | 'profile' | 'suggestion';
 type BuilderStepId =
   | 'template'
@@ -33,7 +30,9 @@ type BuilderStepId =
   | 'extras'
   | 'layout';
 type SectionVisibilityKey = keyof NonNullable<ResumeContent['section_visibility']>;
-type SkillGroupKey = keyof NormalizedResumeSkills['technical'] | 'soft';
+type SkillGroupKey = string;
+type SkillCategory = { id: string; label: string; skills: string[] };
+type ResumeLinkStyle = NonNullable<UserSettings['resume']['formatting']['linkStyle']>;
 
 type PlacementState = {
   item: string;
@@ -43,6 +42,12 @@ type PlacementState = {
 type DragPayload =
   | { kind: 'skill'; value: string; sourceGroup: SkillGroupKey }
   | { kind: 'pending'; value: string; source: SuggestionSource };
+
+type ChatMessage = {
+  id: string;
+  role: 'assistant' | 'user';
+  text: string;
+};
 
 const BUILDER_STEPS: Array<{
   id: BuilderStepId;
@@ -59,7 +64,7 @@ const BUILDER_STEPS: Array<{
   { id: 'education', step: 7, title: 'Education', description: 'Keep education clear and current.' },
   { id: 'skills', step: 8, title: 'Skills', description: 'Click-add missing keywords and keep skill groups clean.' },
   { id: 'extras', step: 9, title: 'Extra Sections', description: 'Languages, achievements, and additional strengths.' },
-  { id: 'layout', step: 10, title: 'Edit Layout', description: 'Switch preview, review the cover letter, and export.' },
+  { id: 'layout', step: 10, title: 'Review & Export', description: 'Review the live resume preview and export.' },
 ];
 
 export default function ResumeEditorPage() {
@@ -68,10 +73,8 @@ export default function ResumeEditorPage() {
   const [profile, setProfile] = useState<FullProfile | null>(null);
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [content, setContent] = useState<ResumeContent | null>(null);
-  const [coverLetter, setCoverLetter] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [previewTab, setPreviewTab] = useState<PreviewTab>('resume');
   const [activeStep, setActiveStep] = useState<BuilderStepId>('template');
   const [atsScore, setAtsScore] = useState(0);
   const [matchedKeywords, setMatchedKeywords] = useState<string[]>([]);
@@ -80,6 +83,17 @@ export default function ResumeEditorPage() {
   const [refreshingAts, setRefreshingAts] = useState(false);
   const [improvingWithAi, setImprovingWithAi] = useState(false);
   const [placementState, setPlacementState] = useState<PlacementState>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [savingLinkStyle, setSavingLinkStyle] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      text: 'Hi, I can help edit this resume. Try: "set summary: ...", "add skill React, TypeScript", "add experience", or "improve resume".',
+    },
+  ]);
 
   useEffect(() => {
     Promise.all([
@@ -90,7 +104,6 @@ export default function ResumeEditorPage() {
       .then(([resumeData, settingsData, profileData]) => {
         setResume(resumeData);
         setContent(hydrateResumeContent(resumeData.resume_content, profileData ?? null));
-        setCoverLetter(resumeData.cover_letter);
         setAtsScore(resumeData.ats_score);
         setMatchedKeywords(resumeData.matched_keywords);
         setMissingKeywords(resumeData.missing_keywords);
@@ -102,20 +115,17 @@ export default function ResumeEditorPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const normalizedSkills = useMemo<NormalizedResumeSkills | null>(
-    () => (content ? normalizeResumeSkills(content.skills) : null),
+  const skillCategories = useMemo<SkillCategory[]>(
+    () => (content ? getSkillCategories(content.skills) : []),
     [content]
   );
 
   const profileSkillSuggestions = useMemo(() => {
     const existing = new Set<string>();
 
-    if (normalizedSkills) {
-      Object.values(normalizedSkills.technical).forEach((values) => {
-        values.forEach((value) => existing.add(value.toLowerCase()));
-      });
-      normalizedSkills.soft.forEach((value) => existing.add(value.toLowerCase()));
-    }
+    skillCategories.forEach((category) => {
+      category.skills.forEach((value) => existing.add(value.toLowerCase()));
+    });
 
     return [
       ...(profile?.technicalSkills ?? []),
@@ -124,7 +134,7 @@ export default function ResumeEditorPage() {
       const normalized = skill.trim().toLowerCase();
       return normalized && !existing.has(normalized) && list.findIndex((item) => item.trim().toLowerCase() === normalized) === index;
     });
-  }, [normalizedSkills, profile]);
+  }, [skillCategories, profile]);
 
   const previewMeta = useMemo(
     () => ({
@@ -134,19 +144,26 @@ export default function ResumeEditorPage() {
       location: profile?.location?.trim() || undefined,
       linkedin: profile?.linkedin?.trim() || undefined,
       github: profile?.github?.trim() || undefined,
+      website: profile?.website?.trim() || undefined,
     }),
     [profile]
   );
 
+  const profileReadiness = useMemo(
+    () => calculateProfileReadiness(profile, content, resume),
+    [profile, content, resume]
+  );
+
   async function save() {
-    if (!content) return;
+    if (!content || !resume) return;
 
     setSaving(true);
     try {
-      await Promise.all([
+      const [savedResume] = await Promise.all([
         api.resumes.update(id, {
+          company_name: resume.company_name,
+          job_title: resume.job_title,
           resume_content: content,
-          cover_letter: coverLetter,
           ats_score: atsScore,
           matched_keywords: matchedKeywords,
           missing_keywords: missingKeywords,
@@ -167,6 +184,7 @@ export default function ResumeEditorPage() {
             })
           : Promise.resolve(null),
       ]);
+      setResume(savedResume);
       toast.success('Resume builder changes saved');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Save failed';
@@ -183,6 +201,10 @@ export default function ResumeEditorPage() {
 
   function updateProfileField<K extends keyof FullProfile>(field: K, value: FullProfile[K]) {
     setProfile((current) => ({ ...normalizeProfile(current), [field]: value }));
+  }
+
+  function updateResumeField(field: 'company_name' | 'job_title', value: string) {
+    setResume((current) => (current ? { ...current, [field]: value } : current));
   }
 
   async function refreshAts(nextContent?: ResumeContent) {
@@ -207,7 +229,15 @@ export default function ResumeEditorPage() {
   async function handleAddKeyword(keyword: string) {
     if (!content) return;
 
-    const nextSkills = addSkillToResumeSkills(content.skills, keyword);
+    const categories = ensureSkillCategories(content.skills);
+    const targetCategory = categories[0] ?? createSkillCategory('Skills');
+    const nextSkills = setSkillCategories(content.skills, [
+      ...categories.filter((category) => category.id !== targetCategory.id),
+      {
+        ...targetCategory,
+        skills: uniqueLines([...targetCategory.skills, keyword]),
+      },
+    ]);
     const nextContent = { ...content, skills: nextSkills };
     setContent(nextContent);
     await refreshAts(nextContent);
@@ -226,7 +256,7 @@ export default function ResumeEditorPage() {
 
   function addItemToSpecificSkillGroup(item: string, group: SkillGroupKey) {
     if (!content || !item.trim()) return;
-    const nextSkills = moveItemIntoSkillGroup(content.skills, item, group);
+    const nextSkills = addSkillToCategory(content.skills, group, item);
     const nextContent = { ...content, skills: nextSkills };
     setContent(nextContent);
     void refreshAts(nextContent);
@@ -234,11 +264,17 @@ export default function ResumeEditorPage() {
 
   function moveSkillAcrossGroups(item: string, from: SkillGroupKey, to: SkillGroupKey) {
     if (!content || from === to) return;
-    const removed = removeSkillFromResumeSkills(content.skills, item, from);
-    const added = moveItemIntoSkillGroup(removed, item, to);
+    const removed = removeSkillFromCategory(content.skills, from, item);
+    const added = addSkillToCategory(removed, to, item);
     const nextContent = { ...content, skills: added };
     setContent(nextContent);
     void refreshAts(nextContent);
+  }
+
+  function updateSkillCategories(categories: SkillCategory[]) {
+    if (!content) return;
+    const nextContent = { ...content, skills: setSkillCategories(content.skills, categories) };
+    setContent(nextContent);
   }
 
   function addItemToExperience(index: number, item: string) {
@@ -287,6 +323,34 @@ export default function ResumeEditorPage() {
     }
   }
 
+  async function updateLinkStyle(linkStyle: ResumeLinkStyle) {
+    if (!settings || settings.resume.formatting.linkStyle === linkStyle) return;
+
+    const nextSettings: UserSettings = {
+      ...settings,
+      resume: {
+        ...settings.resume,
+        formatting: {
+          ...settings.resume.formatting,
+          linkStyle,
+        },
+      },
+    };
+
+    setSettings(nextSettings);
+    setSavingLinkStyle(true);
+    try {
+      const saved = await api.settings.update(nextSettings);
+      setSettings(saved);
+      toast.success('Link display updated.');
+    } catch (error) {
+      setSettings(settings);
+      toast.error(error instanceof Error ? error.message : 'Failed to update link display.');
+    } finally {
+      setSavingLinkStyle(false);
+    }
+  }
+
   async function handleAiImprove() {
     if (!content) return;
 
@@ -294,7 +358,7 @@ export default function ResumeEditorPage() {
     try {
       const result = await api.resumes.aiImprove(id, {
         resume_content: content,
-        focus_text: getAiFocusText(activeStep, content, profile, coverLetter),
+        focus_text: getAiFocusText(activeStep, content, profile),
       });
       setContent(result.resume_content);
       setAtsScore(result.ats_score);
@@ -310,18 +374,49 @@ export default function ResumeEditorPage() {
     }
   }
 
-  async function handleCoverPdfDownload() {
-    try {
-      await api.resumes.downloadCoverPdf(id);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to download cover letter PDF';
-      toast.error(message);
-    }
-  }
-
   function goToStep(stepId: BuilderStepId) {
     setActiveStep(stepId);
     document.getElementById(`builder-step-${stepId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function handleChatSubmit() {
+    const message = chatInput.trim();
+    if (!message || !content || chatLoading) return;
+
+    setChatInput('');
+    setChatMessages((current) => [
+      ...current,
+      { id: crypto.randomUUID(), role: 'user', text: message },
+    ]);
+
+    setChatLoading(true);
+    try {
+      const result = await api.resumes.chat(id, {
+        message,
+        resume_content: content,
+      });
+
+      if (result.allowed && result.resume_content) {
+        setContent(hydrateResumeContent(result.resume_content, profile));
+        setActiveStep(inferStepFromChat(message));
+      }
+
+      setChatMessages((current) => [
+        ...current,
+        { id: crypto.randomUUID(), role: 'assistant', text: result.reply },
+      ]);
+    } catch (error) {
+      setChatMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          text: error instanceof Error ? error.message : 'I could not update the resume right now.',
+        },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
   }
 
   if (loading || !resume || !content) {
@@ -335,26 +430,46 @@ export default function ResumeEditorPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="app-panel-strong p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div>
+    <div className="space-y-4">
+      <section className="app-panel-strong p-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(220px,0.9fr)_minmax(420px,1.4fr)_auto] xl:items-end">
+          <div className="min-w-0">
             <div className="app-eyebrow">Resume builder</div>
-            <h1 className="app-heading mt-2">Edit with live preview and ATS guidance</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--text-secondary)]">
-              Work through the builder steps, keep the ATS score visible, and watch the resume preview update in real time as you edit.
-            </p>
+            <h1 className="mt-1 truncate text-2xl font-semibold tracking-[-0.04em] text-[var(--text-primary)]">Edit resume</h1>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <MiniMeta label="Template" value={resume.template_id || 'Default'} />
+              <MiniMeta label="Status" value={resume.status} />
+              <MiniMeta label="ATS" value={`${atsScore}%`} />
+            </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <StatPill label="Company" value={resume.company_name} />
-            <StatPill label="Role" value={resume.job_title} />
-            <StatPill label="ATS score" value={`${atsScore}%`} />
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <FieldGroup label="Company name">
+              <BuilderInput
+                value={resume.company_name}
+                onChange={(event) => updateResumeField('company_name', event.target.value)}
+                placeholder="Company or resume name"
+                className="py-2"
+              />
+            </FieldGroup>
+            <FieldGroup label="Target role">
+              <BuilderInput
+                value={resume.job_title}
+                onChange={(event) => updateResumeField('job_title', event.target.value)}
+                placeholder="Software Engineer"
+                className="py-2"
+              />
+            </FieldGroup>
+          </div>
+
+          <div className="flex flex-col gap-2 xl:min-w-[220px]">
+            <ProfileReadinessCard readiness={profileReadiness} />
           </div>
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)_330px]">
-        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:items-start">
+        <aside className="hidden">
           <section className="app-panel p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -429,24 +544,9 @@ export default function ResumeEditorPage() {
             description="Review the current resume setup before refining the content."
             onFocus={() => setActiveStep('template')}
           >
-            <div className="grid gap-4 md:grid-cols-3">
-              <InfoTile label="Template" value={resume.template_id || 'Default ATS template'} />
-              <InfoTile label="Platform" value={formatPlatform(resume.source_platform)} />
-              <InfoTile label="Status" value={resume.status} />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button type="button" onClick={handleResumePdfDownload} className="app-button-primary">
-                Download resume PDF
-              </button>
-              <button
-                type="button"
-                onClick={handleCoverPdfDownload}
-                disabled={!settings?.exports.includeCoverLetter}
-                className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {settings?.exports.includeCoverLetter ? 'Download cover letter PDF' : 'Cover letter export disabled'}
-              </button>
-            </div>
+            <p className="text-sm leading-6 text-[var(--text-secondary)]">
+              Template, company, role, export, and readiness controls now live in the header so you can keep them visible while editing the resume.
+            </p>
           </BuilderSection>
 
           <BuilderSection
@@ -763,19 +863,11 @@ export default function ResumeEditorPage() {
             enabled={getSectionVisibility(content).skills}
             onToggleEnabled={(enabled) => updateVisibility('skills', enabled)}
           >
-            {normalizedSkills ? (
-              <SkillsSectionEditor
-                skills={normalizedSkills}
-                onMove={moveSkillAcrossGroups}
-                onAddToGroup={addItemToSpecificSkillGroup}
-                onRemove={(skill, group) => {
-                  const nextSkills = removeSkillFromResumeSkills(content.skills, skill, group);
-                  const nextContent = { ...content, skills: nextSkills };
-                  setContent(nextContent);
-                  void refreshAts(nextContent);
-                }}
-              />
-            ) : null}
+            <SkillsSectionEditor
+              categories={skillCategories}
+              onChange={updateSkillCategories}
+              onMove={moveSkillAcrossGroups}
+            />
           </BuilderSection>
 
           <BuilderSection
@@ -845,46 +937,19 @@ export default function ResumeEditorPage() {
           <BuilderSection
             id="layout"
             step={9}
-            title="Edit Layout"
-            description="Review the final appearance, switch to cover letter preview, and export."
+            title="Review & Export"
+            description="Review the final resume appearance and export."
             onFocus={() => setActiveStep('layout')}
           >
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setPreviewTab('resume')}
-                className={previewTab === 'resume' ? 'app-button-primary' : 'app-button-secondary'}
-              >
-                Resume preview
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewTab('cover')}
-                className={previewTab === 'cover' ? 'app-button-primary' : 'app-button-secondary'}
-              >
-                Cover letter preview
-              </button>
+            <LinkStyleControl
+              value={settings?.resume.formatting.linkStyle ?? 'compact'}
+              disabled={!settings || savingLinkStyle}
+              onChange={(value) => void updateLinkStyle(value)}
+            />
+            <div className="mt-5 flex flex-wrap items-center gap-3">
               <button type="button" onClick={handleResumePdfDownload} className="app-button-secondary">
                 Export resume PDF
               </button>
-              <button
-                type="button"
-                onClick={handleCoverPdfDownload}
-                disabled={!settings?.exports.includeCoverLetter}
-                className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Export cover PDF
-              </button>
-            </div>
-            <div className="mt-4">
-              <FieldGroup label="Cover letter content">
-                <BuilderTextarea
-                  rows={10}
-                  value={coverLetter}
-                  onChange={(event) => setCoverLetter(event.target.value)}
-                  placeholder="Edit the generated cover letter here."
-                />
-              </FieldGroup>
             </div>
           </BuilderSection>
 
@@ -909,99 +974,35 @@ export default function ResumeEditorPage() {
           </div>
         </main>
 
-        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-          <section className="app-panel p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Missing items</div>
-            <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
-              Keep missing ATS items separate. Drag them into a skill bucket, experience, or project card, or use placement.
-            </p>
-            <div className="mt-4 flex max-h-[220px] flex-wrap gap-2 overflow-y-auto pr-1">
-              {missingKeywords.length > 0 ? (
-                missingKeywords.map((item) => (
-                  <PendingChip key={`missing-${item}`} item={item} source="missing" tone="rose" onPlace={openPlacement} />
-                ))
-              ) : (
-                <span className="text-[11px] text-[var(--text-dim)]">No missing ATS items right now.</span>
-              )}
+        <aside className="xl:sticky xl:top-24 xl:self-start">
+          <section className="app-panel overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
+              <div>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">Live resume preview</div>
+                <div className="mt-1 text-xs text-[var(--text-secondary)]">Updates as you edit the form.</div>
+              </div>
             </div>
-          </section>
 
-          <section className="app-panel p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Pulled from profile</div>
-            <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
-              Reusable items from the saved profile. Add or drag them only if they belong in this version.
-            </p>
-            <div className="mt-4 flex max-h-[220px] flex-wrap gap-2 overflow-y-auto pr-1">
-              {profileSkillSuggestions.length > 0 ? (
-                profileSkillSuggestions.map((item) => (
-                  <PendingChip key={`profile-${item}`} item={item} source="profile" tone="cyan" onPlace={openPlacement} />
-                ))
-              ) : (
-                <span className="text-[11px] text-[var(--text-dim)]">No extra profile items available.</span>
-              )}
-            </div>
-          </section>
-
-          <section className="app-panel p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Recommended to improve score</div>
-            <div className="mt-4 max-h-[calc(100vh-8.5rem)] space-y-3 overflow-y-auto pr-1">
-              {atsSuggestions.length > 0 ? (
-                atsSuggestions.map((suggestion, index) => (
-                  <div key={`${suggestion.action}-${index}`} className="rounded-[14px] border border-[var(--border-subtle)] bg-[var(--bg-panel-muted)] px-3 py-3">
-                    <div className="text-xs font-semibold text-[var(--accent-strong)]">+{suggestion.impact_pct}% potential</div>
-                    <div className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">{suggestion.action}</div>
-                    <button
-                      type="button"
-                      onClick={() => openPlacement(suggestion.action, 'suggestion')}
-                      className="mt-3 app-button-secondary px-3 py-2 text-xs"
-                    >
-                      Add to...
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-[14px] border border-[var(--border-subtle)] bg-[var(--bg-panel-muted)] px-3 py-3 text-sm text-[var(--text-secondary)]">
-                  No extra recommendations right now. Refresh ATS after content changes to get new guidance.
-                </div>
-              )}
+            <div className="max-h-[calc(100vh-9rem)] overflow-y-auto bg-slate-100 p-5">
+              <div className="mx-auto max-w-[760px] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.18)]">
+                <ResumePreview meta={previewMeta} content={content} settings={settings?.resume} />
+              </div>
             </div>
           </section>
         </aside>
       </div>
 
-      <section className="app-panel p-4">
+      <section className="hidden">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Live preview</div>
             <div className="mt-1 text-sm text-[var(--text-secondary)]">See every change as you edit.</div>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setPreviewTab('resume')}
-              className={previewTab === 'resume' ? 'app-button-primary px-3 py-2 text-xs' : 'app-button-secondary px-3 py-2 text-xs'}
-            >
-              Resume
-            </button>
-            <button
-              type="button"
-              onClick={() => setPreviewTab('cover')}
-              className={previewTab === 'cover' ? 'app-button-primary px-3 py-2 text-xs' : 'app-button-secondary px-3 py-2 text-xs'}
-            >
-              Cover
-            </button>
-          </div>
         </div>
         <div className="mt-4 overflow-hidden rounded-[16px] border border-[var(--border-subtle)] bg-[rgba(4,10,18,0.72)] p-4">
-          {previewTab === 'resume' ? (
-            <div className="mx-auto max-w-4xl rounded-[18px] border border-black/8 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
-              <ResumePreview meta={previewMeta} content={content} settings={settings?.resume} />
-            </div>
-          ) : (
-            <div className="mx-auto max-w-4xl rounded-[18px] border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-8 text-sm leading-7 text-[var(--text-primary)] shadow-[var(--shadow-panel)] whitespace-pre-wrap">
-              {coverLetter}
-            </div>
-          )}
+          <div className="mx-auto max-w-4xl rounded-[18px] border border-black/8 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+            <ResumePreview meta={previewMeta} content={content} settings={settings?.resume} />
+          </div>
         </div>
       </section>
 
@@ -1027,10 +1028,107 @@ export default function ResumeEditorPage() {
           }}
           experience={content.experience}
           projects={content.projects}
+          skillCategories={skillCategories}
         />
       ) : null}
 
+      <ChatAssistant
+        open={chatOpen}
+        messages={chatMessages}
+        input={chatInput}
+        loading={chatLoading}
+        onOpenChange={setChatOpen}
+        onInputChange={setChatInput}
+        onSubmit={() => void handleChatSubmit()}
+      />
+
     </div>
+  );
+}
+
+function ChatAssistant({
+  open,
+  messages,
+  input,
+  loading,
+  onOpenChange,
+  onInputChange,
+  onSubmit,
+}: {
+  open: boolean;
+  messages: ChatMessage[];
+  input: string;
+  loading: boolean;
+  onOpenChange: (open: boolean) => void;
+  onInputChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <>
+      {open ? (
+        <div className="fixed bottom-24 right-6 z-[150] flex h-[560px] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[22px] border border-[var(--border-subtle)] bg-[var(--bg-elevated)] shadow-[0_28px_90px_rgba(15,23,42,0.35)]">
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
+            <div>
+              <div className="text-sm font-semibold text-[var(--text-primary)]">Resume Assistant</div>
+              <div className="text-xs text-[var(--text-secondary)]">Chat to update fields</div>
+            </div>
+            <button type="button" onClick={() => onOpenChange(false)} className="app-button-secondary px-3 py-2 text-xs">
+              Close
+            </button>
+          </div>
+
+          <div className="flex-1 space-y-3 overflow-y-auto bg-[var(--bg-panel-muted)] p-4">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`max-w-[88%] rounded-[16px] px-4 py-3 text-sm leading-6 ${
+                  message.role === 'user'
+                    ? 'ml-auto bg-[var(--accent)] text-[#06111d]'
+                    : 'mr-auto border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-primary)]'
+                }`}
+              >
+                {message.text}
+              </div>
+            ))}
+            {loading ? (
+              <div className="mr-auto max-w-[88%] rounded-[16px] border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                Thinking...
+              </div>
+            ) : null}
+          </div>
+
+          <div className="border-t border-[var(--border-subtle)] p-3">
+            <div className="flex gap-2">
+              <input
+                value={input}
+                onChange={(event) => onInputChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !loading) {
+                    event.preventDefault();
+                    onSubmit();
+                  }
+                }}
+                className="input-shell"
+                placeholder="Message..."
+                disabled={loading}
+              />
+              <button type="button" onClick={onSubmit} disabled={loading} className="app-button-primary px-4 disabled:cursor-wait disabled:opacity-60">
+                {loading ? '...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        className="fixed bottom-6 right-6 z-[151] inline-flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-[#06111d] shadow-[0_18px_50px_rgba(59,130,246,0.35)] transition hover:scale-105"
+        aria-label={open ? 'Hide resume assistant' : 'Open resume assistant'}
+      >
+        <AiSparkIcon className="h-5 w-5" />
+      </button>
+    </>
   );
 }
 
@@ -1071,6 +1169,97 @@ function BuilderSection({
       </div>
       <div className="mt-5">{children}</div>
     </section>
+  );
+}
+
+function LinkStyleControl({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: ResumeLinkStyle;
+  disabled: boolean;
+  onChange: (value: ResumeLinkStyle) => void;
+}) {
+  const options: Array<{ value: ResumeLinkStyle; label: string; description: string }> = [
+    { value: 'compact', label: 'Key names', description: 'Email, Phone, Location, LinkedIn' },
+    { value: 'icons', label: 'Icons + values', description: 'Icon with the actual value' },
+    { value: 'full', label: 'Key + values', description: 'Show label with the full value' },
+  ];
+
+  return (
+    <div className="rounded-[16px] border border-[var(--border-subtle)] bg-[var(--bg-panel-muted)] p-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-[var(--text-primary)]">Contact link display</div>
+          <div className="mt-1 text-xs text-[var(--text-secondary)]">Choose how contact details and professional links appear in the resume header.</div>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {options.map((option) => {
+          const active = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(option.value)}
+              className={`rounded-[12px] border px-3 py-3 text-left transition disabled:cursor-wait disabled:opacity-60 ${
+                active
+                  ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]'
+                  : 'border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+              }`}
+            >
+              <span className="block text-sm font-semibold">{option.label}</span>
+              <span className="mt-1 block text-xs leading-5 text-[var(--text-secondary)]">{option.description}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ProfileReadinessCard({
+  readiness,
+}: {
+  readiness: { score: number; completed: number; total: number; nextSteps: string[] };
+}) {
+  const tone = getScoreTone(readiness.score);
+  const toneClass =
+    tone === 'high'
+      ? 'border-emerald-400/20 bg-emerald-400/10'
+      : tone === 'medium'
+        ? 'border-amber-400/20 bg-amber-400/10'
+        : 'border-rose-400/20 bg-rose-400/10';
+
+  return (
+    <div className={`rounded-[12px] border px-3 py-2 ${toneClass}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold text-[var(--text-primary)]">Profile readiness</div>
+          <div className="mt-0.5 text-[11px] text-[var(--text-secondary)]">{readiness.completed}/{readiness.total} complete</div>
+        </div>
+        <div className="text-xl font-semibold tracking-[-0.04em] text-[var(--text-primary)]">{readiness.score}%</div>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/30">
+        <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(readiness.score, 4)}%`, background: getScoreFill(readiness.score) }} />
+      </div>
+      {readiness.nextSteps.length > 0 ? (
+        <div className="mt-1 truncate text-[11px] text-[var(--text-secondary)]">Next: {readiness.nextSteps[0]}</div>
+      ) : (
+        <p className="mt-1 text-[11px] text-[var(--text-secondary)]">Core profile is ready.</p>
+      )}
+    </div>
+  );
+}
+
+function MiniMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-panel-muted)] px-2.5 py-1 text-[11px] text-[var(--text-secondary)]">
+      <span className="font-semibold uppercase tracking-[0.12em] text-[var(--text-dim)]">{label}</span>
+      <span className="max-w-[120px] truncate font-medium text-[var(--text-primary)]">{value}</span>
+    </span>
   );
 }
 
@@ -1131,42 +1320,67 @@ function BuilderTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
 }
 
 function SkillsSectionEditor({
-  skills,
+  categories,
+  onChange,
   onMove,
-  onAddToGroup,
-  onRemove,
 }: {
-  skills: NormalizedResumeSkills;
+  categories: SkillCategory[];
+  onChange: (categories: SkillCategory[]) => void;
   onMove: (skill: string, from: SkillGroupKey, to: SkillGroupKey) => void;
-  onAddToGroup: (skill: string, group: SkillGroupKey) => void;
-  onRemove: (skill: string, group: keyof NormalizedResumeSkills['technical'] | 'soft') => void;
 }) {
-  const groups: Array<{ label: string; key: keyof NormalizedResumeSkills['technical'] | 'soft'; values: string[] }> = [
-    { label: 'Languages', key: 'languages', values: skills.technical.languages },
-    { label: 'Backend / Frameworks', key: 'backend_frameworks', values: skills.technical.backend_frameworks },
-    { label: 'AI / GenAI', key: 'ai_genai', values: skills.technical.ai_genai },
-    { label: 'Streaming / Messaging', key: 'streaming_messaging', values: skills.technical.streaming_messaging },
-    { label: 'Databases / Storage', key: 'databases_storage', values: skills.technical.databases_storage },
-    { label: 'Cloud / Infra', key: 'cloud_infra', values: skills.technical.cloud_infra },
-    { label: 'Tools / Platforms', key: 'tools_platforms', values: skills.technical.tools_platforms },
-    { label: 'Other Technical', key: 'other', values: skills.technical.other },
-    { label: 'Soft Skills', key: 'soft', values: skills.soft },
-  ];
+  function updateCategory(categoryId: string, updates: Partial<SkillCategory>) {
+    onChange(categories.map((category) => (category.id === categoryId ? { ...category, ...updates } : category)));
+  }
+
+  function addCategory() {
+    onChange([...categories, createSkillCategory(`Category ${categories.length + 1}`)]);
+  }
+
+  function addSkill(categoryId: string, skill: string) {
+    const clean = skill.trim();
+    if (!clean) return;
+    onChange(
+      categories.map((category) =>
+        category.id === categoryId ? { ...category, skills: uniqueLines([...category.skills, clean]) } : category
+      )
+    );
+  }
+
+  function removeSkill(categoryId: string, skill: string) {
+    onChange(
+      categories.map((category) =>
+        category.id === categoryId
+          ? { ...category, skills: category.skills.filter((item) => item.toLowerCase() !== skill.toLowerCase()) }
+          : category
+      )
+    );
+  }
 
   return (
     <div className="space-y-5">
-      <div className="space-y-3">
-        {groups.map((group) => (
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm text-[var(--text-secondary)]">Create your own categories and add skills under each one.</div>
+        <button type="button" onClick={addCategory} className="app-button-primary px-3 py-2 text-xs">
+          Add category
+        </button>
+      </div>
+      <div className="grid gap-3">
+        {categories.map((category) => (
           <SkillDropZone
-            key={group.key}
-            label={group.label}
-            groupKey={group.key}
-            values={group.values}
+            key={category.id}
+            category={category}
+            onRename={(label) => updateCategory(category.id, { label })}
+            onAddSkill={(skill) => addSkill(category.id, skill)}
             onMove={onMove}
-            onAddToGroup={onAddToGroup}
-            onRemove={onRemove}
+            onRemoveSkill={(skill) => removeSkill(category.id, skill)}
+            onRemoveCategory={() => onChange(categories.filter((item) => item.id !== category.id))}
           />
         ))}
+        {categories.length === 0 ? (
+          <div className="app-panel-muted p-5 text-sm text-[var(--text-secondary)]">
+            No skill categories yet. Add one like Backend, AI, Database, Cloud, or Tools.
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1220,18 +1434,63 @@ function formatPlatform(platform?: string) {
   return value === 'linkedin' ? 'LinkedIn' : value === 'indeed' ? 'Indeed' : value === 'naukri' ? 'Naukri' : 'Manual';
 }
 
+function calculateProfileReadiness(profile: FullProfile | null, content: ResumeContent | null, resume: Resume | null) {
+  const normalizedProfile = normalizeProfile(profile);
+  const checks: Array<{ label: string; done: boolean }> = [
+    { label: 'Add company name', done: Boolean(resume?.company_name?.trim()) },
+    { label: 'Add target role', done: Boolean(resume?.job_title?.trim()) },
+    { label: 'Add full name', done: Boolean(normalizedProfile.name?.trim()) },
+    { label: 'Add email', done: Boolean(normalizedProfile.email?.trim()) },
+    { label: 'Add phone', done: Boolean(normalizedProfile.phone?.trim()) },
+    { label: 'Add location', done: Boolean(normalizedProfile.location?.trim()) },
+    { label: 'Add one professional link', done: [normalizedProfile.linkedin, normalizedProfile.github, normalizedProfile.website].some((item) => Boolean(item?.trim())) },
+    { label: 'Write summary', done: Boolean(content?.summary?.trim()) },
+    {
+      label: 'Add work experience',
+      done: Boolean(content?.experience?.some((item) => item.job_title?.trim() && item.company?.trim() && item.bullets?.some((bullet) => bullet.trim()))),
+    },
+    {
+      label: 'Add skills',
+      done: Boolean(content && getSkillCategories(content.skills).some((category) => category.label.trim() && category.skills.length > 0)),
+    },
+    {
+      label: 'Add education',
+      done: Boolean(content?.education?.some((item) => item.degree?.trim() || item.institution?.trim())),
+    },
+  ];
+  const completed = checks.filter((check) => check.done).length;
+
+  return {
+    score: Math.round((completed / checks.length) * 100),
+    completed,
+    total: checks.length,
+    nextSteps: checks.filter((check) => !check.done).slice(0, 3).map((check) => check.label),
+  };
+}
+
+function inferStepFromChat(message: string): BuilderStepId {
+  const lower = message.toLowerCase();
+  if (lower.includes('summary')) return 'summary';
+  if (lower.includes('skill') || lower.includes('keyword')) return 'skills';
+  if (lower.includes('experience') || lower.includes('work')) return 'experience';
+  if (lower.includes('project')) return 'projects';
+  if (lower.includes('education') || lower.includes('degree')) return 'education';
+  if (lower.includes('linkedin') || lower.includes('github') || lower.includes('portfolio') || lower.includes('website')) return 'links';
+  if (lower.includes('name') || lower.includes('email') || lower.includes('phone') || lower.includes('location')) return 'personal';
+  if (lower.includes('achievement') || lower.includes('language') || lower.includes('hobb')) return 'extras';
+  return 'layout';
+}
+
 function getAiFocusText(
   step: BuilderStepId,
   content: ResumeContent,
-  profile: FullProfile | null,
-  coverLetter: string
+  profile: FullProfile | null
 ) {
   if (step === 'summary') return content.summary || '';
   if (step === 'skills') return JSON.stringify(content.skills);
   if (step === 'experience') return content.experience.flatMap((item) => item.bullets).join('\n');
   if (step === 'education') return content.education.flatMap((item) => item.bullets || []).join('\n');
   if (step === 'links') return [profile?.linkedin, profile?.github, profile?.website].filter(Boolean).join('\n');
-  if (step === 'layout') return coverLetter || '';
 
   return [
     content.summary,
@@ -1359,12 +1618,11 @@ function SectionToggle({
       onClick={() => onChange(!enabled)}
       className={`inline-flex items-center gap-2 rounded-[10px] border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
         enabled
-          ? 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100'
+          ? 'border-blue-500/35 bg-blue-50 text-blue-700'
           : 'border-white/10 bg-white/5 text-[var(--text-dim)]'
       }`}
     >
       <span>{label}</span>
-      <span>{enabled ? 'On' : 'Off'}</span>
     </button>
   );
 }
@@ -1407,20 +1665,27 @@ function PendingChip({
 }
 
 function SkillDropZone({
-  label,
-  groupKey,
-  values,
+  category,
+  onRename,
+  onAddSkill,
   onMove,
-  onAddToGroup,
-  onRemove,
+  onRemoveSkill,
+  onRemoveCategory,
 }: {
-  label: string;
-  groupKey: SkillGroupKey;
-  values: string[];
+  category: SkillCategory;
+  onRename: (label: string) => void;
+  onAddSkill: (skill: string) => void;
   onMove: (skill: string, from: SkillGroupKey, to: SkillGroupKey) => void;
-  onAddToGroup: (skill: string, group: SkillGroupKey) => void;
-  onRemove: (skill: string, group: SkillGroupKey) => void;
+  onRemoveSkill: (skill: string) => void;
+  onRemoveCategory: () => void;
 }) {
+  const [draftSkill, setDraftSkill] = useState('');
+
+  function submitSkill() {
+    onAddSkill(draftSkill);
+    setDraftSkill('');
+  }
+
   return (
     <div
       onDragOver={(event) => event.preventDefault()}
@@ -1429,29 +1694,49 @@ function SkillDropZone({
         const payload = parseDragPayload(event);
         if (!payload) return;
         if (payload.kind === 'skill') {
-          onMove(payload.value, payload.sourceGroup, groupKey);
+          onMove(payload.value, payload.sourceGroup, category.id);
         } else {
-          onAddToGroup(payload.value, groupKey);
+          onAddSkill(payload.value);
         }
       }}
       className="rounded-[14px] border border-[var(--border-subtle)] bg-[var(--bg-panel-muted)] p-4"
     >
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-secondary)]">{label}</div>
-        <div className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-dim)]">Drop here</div>
+      <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(160px,0.7fr)_minmax(220px,1fr)_auto_auto] lg:items-center">
+        <input
+          value={category.label}
+          onChange={(event) => onRename(event.target.value)}
+          className="min-w-0 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-input)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
+          placeholder="Category name"
+        />
+        <input
+          value={draftSkill}
+          onChange={(event) => setDraftSkill(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              submitSkill();
+            }
+          }}
+          className="input-shell py-2"
+          placeholder={`Add skill to ${category.label || 'category'}`}
+        />
+        <button type="button" onClick={onRemoveCategory} className="app-button-secondary px-3 py-2 text-xs">
+          Remove
+        </button>
+        <div className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-dim)]"></div>
       </div>
       <div className="flex flex-wrap gap-2">
-        {values.length > 0 ? (
-          values.map((skill) => (
+        {category.skills.length > 0 ? (
+          category.skills.map((skill) => (
             <button
-              key={`${groupKey}-${skill}`}
+              key={`${category.id}-${skill}`}
               type="button"
               draggable
               onDragStart={(event) => {
                 event.dataTransfer.effectAllowed = 'move';
-                event.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'skill', value: skill, sourceGroup: groupKey } satisfies DragPayload));
+                event.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'skill', value: skill, sourceGroup: category.id } satisfies DragPayload));
               }}
-              onClick={() => onRemove(skill, groupKey)}
+              onClick={() => onRemoveSkill(skill)}
               className="inline-flex items-center gap-1 rounded-[10px] border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100 transition hover:border-rose-400/20 hover:bg-rose-400/10 hover:text-rose-100"
             >
               {skill}
@@ -1500,6 +1785,7 @@ function PlacementModal({
   item,
   experience,
   projects,
+  skillCategories,
   onClose,
   onAuto,
   onPlaceInSkill,
@@ -1509,24 +1795,13 @@ function PlacementModal({
   item: string;
   experience: ResumeContent['experience'];
   projects: ResumeContent['projects'];
+  skillCategories: SkillCategory[];
   onClose: () => void;
   onAuto: () => void;
   onPlaceInSkill: (group: SkillGroupKey) => void;
   onPlaceInExperience: (index: number) => void;
   onPlaceInProject: (index: number) => void;
 }) {
-  const skillGroups: Array<{ key: SkillGroupKey; label: string }> = [
-    { key: 'languages', label: 'Languages' },
-    { key: 'backend_frameworks', label: 'Backend / Frameworks' },
-    { key: 'ai_genai', label: 'AI / GenAI' },
-    { key: 'streaming_messaging', label: 'Streaming / Messaging' },
-    { key: 'databases_storage', label: 'Databases / Storage' },
-    { key: 'cloud_infra', label: 'Cloud / Infra' },
-    { key: 'tools_platforms', label: 'Tools / Platforms' },
-    { key: 'other', label: 'Other Technical' },
-    { key: 'soft', label: 'Soft Skills' },
-  ];
-
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
       <button type="button" onClick={onClose} className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-label="Close placement modal" />
@@ -1551,8 +1826,8 @@ function PlacementModal({
           <div className="space-y-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-secondary)]">Skills</div>
             <div className="space-y-2">
-              {skillGroups.map((group) => (
-                <button key={group.key} type="button" onClick={() => onPlaceInSkill(group.key)} className="app-button-secondary w-full justify-start px-3 py-2 text-xs">
+              {skillCategories.map((group) => (
+                <button key={group.id} type="button" onClick={() => onPlaceInSkill(group.id)} className="app-button-secondary w-full justify-start px-3 py-2 text-xs">
                   {group.label}
                 </button>
               ))}
@@ -1627,23 +1902,88 @@ function classifyDropGroup(item: string): SkillGroupKey {
   return 'other';
 }
 
-function moveItemIntoSkillGroup(skills: ResumeContent['skills'], item: string, group: SkillGroupKey): ResumeContent['skills'] {
+function getSkillCategories(skills: ResumeSkills): SkillCategory[] {
+  if (Object.prototype.hasOwnProperty.call(skills, 'categories')) {
+    return (skills.categories ?? []).map((category) => ({
+      id: category.id,
+      label: category.label,
+      skills: uniqueLines(category.skills || []),
+    }));
+  }
+
   const normalized = normalizeResumeSkills(skills);
+  const legacyGroups: Array<{ label: string; skills: string[] }> = [
+    { label: 'Languages', skills: normalized.technical.languages },
+    { label: 'Backend', skills: normalized.technical.backend_frameworks },
+    { label: 'AI', skills: normalized.technical.ai_genai },
+    { label: 'Streaming / Messaging', skills: normalized.technical.streaming_messaging },
+    { label: 'Database', skills: normalized.technical.databases_storage },
+    { label: 'Cloud / Infra', skills: normalized.technical.cloud_infra },
+    { label: 'Tools', skills: normalized.technical.tools_platforms },
+    { label: 'Other', skills: normalized.technical.other },
+    { label: 'Soft Skills', skills: normalized.soft },
+  ];
+
+  return legacyGroups
+    .filter((group) => group.skills.length > 0)
+    .map((group) => createSkillCategory(group.label, group.skills));
+}
+
+function ensureSkillCategories(skills: ResumeSkills) {
+  const categories = getSkillCategories(skills);
+  return categories;
+}
+
+function createSkillCategory(label: string, skills: string[] = []): SkillCategory {
+  return {
+    id: `skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    label,
+    skills: uniqueLines(skills),
+  };
+}
+
+function setSkillCategories(skills: ResumeSkills, categories: SkillCategory[]): ResumeSkills {
+  return {
+    ...skills,
+    categories: categories.map((category) => ({
+      id: category.id,
+      label: category.label,
+      skills: uniqueLines(category.skills),
+    })),
+  };
+}
+
+function addSkillToCategory(skills: ResumeSkills, categoryId: SkillGroupKey, item: string): ResumeSkills {
   const clean = item.trim();
   if (!clean) return skills;
 
-  if (group === 'soft') {
-    if (!normalized.soft.some((entry) => entry.toLowerCase() === clean.toLowerCase())) {
-      normalized.soft.push(clean);
-    }
-  } else if (!normalized.technical[group].some((entry) => entry.toLowerCase() === clean.toLowerCase())) {
-    normalized.technical[group].push(clean);
-  }
+  const categories = ensureSkillCategories(skills);
+  const target = categories.find((category) => category.id === categoryId) ?? categories[0] ?? createSkillCategory('Skills');
+  const nextCategories = categories.length ? categories : [target];
+  return setSkillCategories(
+    skills,
+    nextCategories.map((category) =>
+      category.id === target.id ? { ...category, skills: uniqueLines([...category.skills, clean]) } : category
+    )
+  );
+}
 
-  return {
-    technical: normalized.technical,
-    soft: normalized.soft,
-  };
+function removeSkillFromCategory(skills: ResumeSkills, categoryId: SkillGroupKey, item: string): ResumeSkills {
+  const categories = ensureSkillCategories(skills);
+  return setSkillCategories(
+    skills,
+    categories.map((category) =>
+      category.id === categoryId
+        ? { ...category, skills: category.skills.filter((skill) => skill.toLowerCase() !== item.toLowerCase()) }
+        : category
+    )
+  );
+}
+
+function moveItemIntoSkillGroup(skills: ResumeContent['skills'], item: string, group: SkillGroupKey): ResumeContent['skills'] {
+  const clean = item.trim();
+  if (!clean) return skills;
+  return addSkillToCategory(skills, group, clean);
 }
 
 function uniqueLines(items: string[]) {

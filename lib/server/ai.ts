@@ -17,9 +17,9 @@ function getClient() {
   return client;
 }
 
-export async function callOpenAI(prompt: string, expectJson = true) {
+export async function callOpenAI(prompt: string, expectJson = true, model?: string) {
   const response = await getClient().responses.create({
-    model: process.env.OPENAI_MODEL || 'gpt-5.2',
+    model: model || process.env.OPENAI_MODEL || 'gpt-5.2',
     input: prompt,
   });
 
