@@ -16,6 +16,26 @@ type NominatimResult = {
   name?: string;
 };
 
+const COMMON_JOB_LOCATIONS = [
+  'Bengaluru, Karnataka, India',
+  'Hyderabad, Telangana, India',
+  'Mumbai, Maharashtra, India',
+  'Pune, Maharashtra, India',
+  'Chennai, Tamil Nadu, India',
+  'Delhi, Delhi, India',
+  'Noida, Uttar Pradesh, India',
+  'Gurugram, Haryana, India',
+  'Kolkata, West Bengal, India',
+  'Ahmedabad, Gujarat, India',
+  'London, United Kingdom',
+  'New York, United States',
+  'San Francisco, United States',
+  'Sydney, Australia',
+  'Melbourne, Australia',
+  'Singapore, Singapore',
+  'Dubai, United Arab Emirates',
+];
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q')?.trim() || '';
@@ -23,6 +43,18 @@ export async function GET(request: Request) {
 
   if (query.length < 2) {
     return NextResponse.json({ results: [] });
+  }
+
+  const normalizedQuery = query.toLowerCase();
+  const commonResults =
+    scope === 'country'
+      ? []
+      : COMMON_JOB_LOCATIONS.filter((location) =>
+          location.toLowerCase().split(',')[0].startsWith(normalizedQuery)
+        ).map((label, index) => ({ id: `common-${index}-${label}`, label }));
+
+  if (commonResults.length > 0) {
+    return NextResponse.json({ results: commonResults.slice(0, 5) });
   }
 
   try {
@@ -46,8 +78,8 @@ export async function GET(request: Request) {
 
     const data = (await upstream.json()) as NominatimResult[];
 
-    const seen = new Set<string>();
-    const results = isCountrySearch
+    const seen = new Set(commonResults.map((item) => item.label));
+    const upstreamResults = isCountrySearch
       ? data
           .map((item, index) => {
             const label = item.address?.country || item.display_name?.split(',')[0]?.trim() || item.name;
@@ -94,8 +126,8 @@ export async function GET(request: Request) {
           })
           .filter((item): item is { id: string; label: string } => Boolean(item));
 
-    return NextResponse.json({ results });
+    return NextResponse.json({ results: [...commonResults, ...upstreamResults].slice(0, 5) });
   } catch {
-    return NextResponse.json({ results: [] });
+    return NextResponse.json({ results: commonResults.slice(0, 5) });
   }
 }

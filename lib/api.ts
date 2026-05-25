@@ -248,6 +248,19 @@ export const api = {
       }),
   },
 
+  jobSearch: {
+    search: (data: JobSearchInput) =>
+      request<JobSearchResponse>('/api/job-search', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    suggestions: (data: JobSearchSuggestionInput) =>
+      request<{ results: string[] }>('/api/job-search/suggestions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  },
+
   // ─── Resumes ────────────────────────────────────────────
   resumes: {
     list:   () => request<ResumeSummary[]>('/api/resumes'),
@@ -412,6 +425,9 @@ export interface ResumeSummary {
   id: string; company_name: string; job_title: string; ats_score: number;
   source_platform?: string; template_id?: string; status: string; created_at: string;
   updated_at?: string;
+  base_resume_id?: string;
+  base_resume_name?: string;
+  job_url?: string;
   location?: string;
   resume_content?: ResumeContent;
 }
@@ -466,6 +482,57 @@ export interface CreateJobApplicationInput {
   source_platform?: string;
   status?: string;
   application_link?: string;
+}
+
+export interface LiveJobOpening {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  source: string;
+  description: string;
+  postedAt: string;
+  workMode: string;
+  employmentType: string;
+  salary: string;
+  applyLink?: string;
+  tags: string[];
+  responsibilities: string[];
+  matchScore?: number;
+  matchedKeywords: string[];
+  missingKeywords: string[];
+}
+
+export interface JobSearchFilters {
+  title?: string;
+  location?: string;
+  skills?: string;
+  company?: string;
+  source?: string;
+  workMode?: string;
+  posted?: string;
+}
+
+export interface JobSearchInput {
+  query?: string;
+  mode: 'standard' | 'ai';
+  resumeId?: string;
+  filters: JobSearchFilters;
+}
+
+export interface JobSearchResponse {
+  jobs: LiveJobOpening[];
+  provider: string;
+  aiCriteria?: {
+    query: string;
+    skills: string[];
+  };
+}
+
+export interface JobSearchSuggestionInput {
+  type: 'title' | 'skills' | 'company' | 'source';
+  query: string;
+  filters: JobSearchFilters;
 }
 
 export interface ResumeAnalysisSnapshot {
@@ -679,6 +746,8 @@ export interface GeneratePayload {
   company_name: string; job_title: string;
   template_id: string;
   source_platform?: 'linkedin' | 'indeed' | 'naukri' | 'manual';
+  base_resume_id?: string;
+  job_url?: string;
   job_description: string; cover_letter_tone: 'formal' | 'modern' | 'aggressive';
 }
 
@@ -691,6 +760,7 @@ export interface GenerateResult {
 
 export interface JDAnalysisInput {
   job_description: string;
+  base_resume_id?: string;
 }
 
 export interface JDAnalysisResult {

@@ -1,16 +1,20 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuthUserId } from '@/lib/server/auth-token';
-import { handleRouteError } from '@/lib/server/http';
+import { handleRouteError, HttpError } from '@/lib/server/http';
 import { getFullProfile } from '@/lib/server/profile-service';
 import { getUserSettings } from '@/lib/server/settings-service';
 import { assertCanUse, consumeUsage } from '@/lib/server/billing-service';
 import { analyzeCandidateAgainstJD } from '@/lib/server/tailoring-pipeline';
+import { db } from '@/lib/server/db';
+import { buildProfileFromBaseResume } from '@/lib/server/base-resume-evidence';
+import type { ResumeContent } from '@/lib/api';
 
 export const runtime = 'nodejs';
 
 const analysisSchema = z.object({
   job_description: z.string().min(50).max(8000),
+  base_resume_id: z.string().trim().min(1).optional(),
 });
 
 export async function POST(request: Request) {
@@ -19,10 +23,26 @@ export async function POST(request: Request) {
     const body = analysisSchema.parse(await request.json());
     await assertCanUse(userId, 'jd-analysis');
     const [userProfile, userSettings] = await Promise.all([getFullProfile(userId), getUserSettings(userId)]);
+    let candidateProfile = userProfile;
+
+    if (body.base_resume_id) {
+      const {
+        rows: [baseResume],
+      } = await db.query<{ resume_content: ResumeContent; status: string }>(
+        'SELECT resume_content, status FROM resumes WHERE id=$1 AND user_id=$2',
+        [body.base_resume_id, userId]
+      );
+
+      if (!baseResume || baseResume.status === 'tailored') {
+        throw new HttpError(400, 'Select a valid base resume before analysis.');
+      }
+
+      candidateProfile = buildProfileFromBaseResume(userProfile, baseResume.resume_content);
+    }
 
     const result = await analyzeCandidateAgainstJD({
       jobDescription: body.job_description,
-      candidateProfile: userProfile,
+      candidateProfile,
       resumeSettings: userSettings.resume,
     });
     await consumeUsage(userId, 'jd-analysis');

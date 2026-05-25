@@ -209,7 +209,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read, created_at DESC);
 
 -- ─── Resume History ───────────────────────────────────────
--- NOTE: raw JD is intentionally NOT stored here (privacy)
+-- Tailored resumes retain their source-job context for review and regeneration.
 CREATE TABLE IF NOT EXISTS resumes (
   id                TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   user_id           TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -227,6 +227,9 @@ CREATE TABLE IF NOT EXISTS resumes (
   missing_keywords  TEXT DEFAULT '[]',
   suggestions       TEXT DEFAULT '[]',
   status            TEXT NOT NULL DEFAULT 'draft',
+  base_resume_id    TEXT REFERENCES resumes(id) ON DELETE SET NULL,
+  job_description   TEXT,
+  job_url           TEXT,
   sort_order        INTEGER,
   created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))

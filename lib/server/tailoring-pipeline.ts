@@ -183,6 +183,7 @@ export async function generateTailoredResumePackage(input: {
   jobDescription: string;
   candidateProfile: FullProfile;
   resumeSettings?: ResumeSettings;
+  includeCoverLetter?: boolean;
 }) {
   const analysis = await analyzeCandidateAgainstJD({
     jobDescription: input.jobDescription,
@@ -275,18 +276,20 @@ export async function generateTailoredResumePackage(input: {
     aiEvaluation: aiAtsEvaluation,
   });
 
-  const coverLetter = await callOpenAI(
-    COVER_LETTER_PROMPT({
-      companyName: input.companyName,
-      jobTitle: input.jobTitle,
-      tone: input.coverLetterTone,
-      jdParse: analysis.jdParse,
-      mappings: analysis.mappings,
-      finalResume: resumeContent,
-      candidateEvidence: analysis.candidateEvidence,
-    }, prompts?.coverLetter),
-    false
-  );
+  const coverLetter = input.includeCoverLetter
+    ? await callOpenAI(
+        COVER_LETTER_PROMPT({
+          companyName: input.companyName,
+          jobTitle: input.jobTitle,
+          tone: input.coverLetterTone,
+          jdParse: analysis.jdParse,
+          mappings: analysis.mappings,
+          finalResume: resumeContent,
+          candidateEvidence: analysis.candidateEvidence,
+        }, prompts?.coverLetter),
+        false
+      )
+    : '';
 
   return {
     ...analysis,

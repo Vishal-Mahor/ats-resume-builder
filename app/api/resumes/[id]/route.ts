@@ -15,7 +15,13 @@ export async function GET(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const {
       rows: [resume],
-    } = await db.query('SELECT * FROM resumes WHERE id=$1 AND user_id=$2', [id, userId]);
+    } = await db.query(
+      `SELECT r.*, b.company_name AS base_resume_name
+       FROM resumes r
+       LEFT JOIN resumes b ON b.id = r.base_resume_id
+       WHERE r.id=$1 AND r.user_id=$2`,
+      [id, userId]
+    );
 
     if (!resume) {
       throw new HttpError(404, 'Resume not found');

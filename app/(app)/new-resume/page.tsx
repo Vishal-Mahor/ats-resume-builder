@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Copy, FilePlus2, Pencil, PlusCircle, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Copy, FilePlus2, Pencil, PlusCircle, Sparkles, Trash2, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ResumePreview from '@/components/resume/ResumePreview';
 import {
@@ -12,10 +12,12 @@ import {
   type ResumeContent,
   type ResumeSummary,
   type ResumeTemplate,
+  type JDAnalysisResult,
 } from '@/lib/api';
 
 type CreateMode = 'build' | 'import';
 type WizardStep = 'choice' | 'upload' | 'template' | 'role' | 'name';
+type TailorStep = 'setup' | 'analysis';
 
 export interface WizardData {
   company_name: string;
@@ -74,6 +76,16 @@ export default function NewResumePage() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [tailorOpen, setTailorOpen] = useState(false);
+  const [tailorStep, setTailorStep] = useState<TailorStep>('setup');
+  const [selectedBaseId, setSelectedBaseId] = useState('');
+  const [tailorCompany, setTailorCompany] = useState('');
+  const [tailorRole, setTailorRole] = useState('');
+  const [tailorJobUrl, setTailorJobUrl] = useState('');
+  const [tailorDescription, setTailorDescription] = useState('');
+  const [tailorAnalysis, setTailorAnalysis] = useState<JDAnalysisResult | null>(null);
+  const [analyzingTailor, setAnalyzingTailor] = useState(false);
+  const [generatingTailor, setGeneratingTailor] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -121,6 +133,19 @@ export default function NewResumePage() {
     setResumeName('');
     setImportFile(null);
     setWizardOpen(true);
+  }
+
+  function openTailorWizard(baseResume?: ResumeSummary) {
+    const selectedBase = baseResume ?? baseResumes[0];
+    setSelectedBaseId(selectedBase?.id ?? '');
+    setSelectedTemplate(selectedBase?.template_id ?? templates[0]?.id ?? 'clarity');
+    setTailorCompany('');
+    setTailorRole(selectedBase?.job_title ?? '');
+    setTailorJobUrl('');
+    setTailorDescription('');
+    setTailorAnalysis(null);
+    setTailorStep('setup');
+    setTailorOpen(true);
   }
 
   function chooseMode(mode: CreateMode) {
@@ -219,6 +244,51 @@ export default function NewResumePage() {
     }
   }
 
+  async function analyzeTailoredResume() {
+    if (!selectedBaseId || !tailorCompany.trim() || !tailorRole.trim() || tailorDescription.trim().length < 50) {
+      toast.error('Select a base resume and add company, role, and a complete job description.');
+      return;
+    }
+
+    setAnalyzingTailor(true);
+    try {
+      const analysis = await api.jdAnalysis({
+        base_resume_id: selectedBaseId,
+        job_description: tailorDescription.trim(),
+      });
+      setTailorAnalysis(analysis);
+      setTailorStep('analysis');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not analyze this job description.');
+    } finally {
+      setAnalyzingTailor(false);
+    }
+  }
+
+  async function generateTailoredResume() {
+    if (!selectedBaseId || !tailorAnalysis) return;
+
+    setGeneratingTailor(true);
+    try {
+      const result = await api.generate({
+        base_resume_id: selectedBaseId,
+        company_name: tailorCompany.trim(),
+        job_title: tailorRole.trim(),
+        job_url: tailorJobUrl.trim() || undefined,
+        template_id: selectedTemplate,
+        source_platform: 'manual',
+        job_description: tailorDescription.trim(),
+        cover_letter_tone: 'modern',
+      });
+      toast.success('Tailored resume created. Review each improvement before exporting.');
+      router.push(`/resumes/${result.resume_id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to generate tailored resume.');
+    } finally {
+      setGeneratingTailor(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -248,7 +318,7 @@ export default function NewResumePage() {
           <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--text-secondary)]">
             A resume targeted to a specific job description and built off of a Base Resume.
           </p>
-          <button type="button" disabled className="app-button-secondary mt-4 gap-2 px-4 py-2 opacity-60">
+          <button type="button" onClick={() => openTailorWizard()} disabled={baseResumes.length === 0} className="app-button-secondary mt-4 gap-2 px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60">
             <PlusCircle className="h-4 w-4" />
             Select Base Resume
           </button>
@@ -274,17 +344,19 @@ export default function NewResumePage() {
           deletingId={deletingId}
           onDuplicate={handleDuplicate}
           onDelete={handleDelete}
+          onTailor={openTailorWizard}
         />
 
         <ResumeColumn
           title="Job Tailored Resumes"
           count={tailoredResumes.length}
-          emptyText="Tailored resumes will appear here after the tailored flow is added."
+          emptyText="No tailored resumes yet. Select a base resume and a job description to create one."
           resumes={visibleTailoredResumes}
           previewMeta={previewMeta}
           deletingId={deletingId}
           onDuplicate={handleDuplicate}
           onDelete={handleDelete}
+          onTailor={openTailorWizard}
           tailored
         />
       </section>
@@ -309,6 +381,33 @@ export default function NewResumePage() {
           onClose={() => setWizardOpen(false)}
         />
       ) : null}
+
+      {tailorOpen ? (
+        <TailorResumeModal
+          step={tailorStep}
+          baseResumes={baseResumes}
+          selectedBaseId={selectedBaseId}
+          selectedTemplate={selectedTemplate}
+          templates={templates}
+          company={tailorCompany}
+          role={tailorRole}
+          jobUrl={tailorJobUrl}
+          description={tailorDescription}
+          analysis={tailorAnalysis}
+          analyzing={analyzingTailor}
+          generating={generatingTailor}
+          onBaseChange={setSelectedBaseId}
+          onTemplateChange={setSelectedTemplate}
+          onCompanyChange={setTailorCompany}
+          onRoleChange={setTailorRole}
+          onJobUrlChange={setTailorJobUrl}
+          onDescriptionChange={setTailorDescription}
+          onAnalyze={() => void analyzeTailoredResume()}
+          onBack={() => setTailorStep('setup')}
+          onGenerate={() => void generateTailoredResume()}
+          onClose={() => setTailorOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -323,6 +422,7 @@ function ResumeColumn({
   tailored = false,
   onDuplicate,
   onDelete,
+  onTailor,
 }: {
   title: string;
   count: number;
@@ -333,6 +433,7 @@ function ResumeColumn({
   tailored?: boolean;
   onDuplicate: (resume: ResumeSummary) => void;
   onDelete: (resume: ResumeSummary) => void;
+  onTailor: (resume?: ResumeSummary) => void;
 }) {
   return (
     <div>
@@ -353,6 +454,7 @@ function ResumeColumn({
               tailored={tailored}
               onDuplicate={() => onDuplicate(resume)}
               onDelete={() => onDelete(resume)}
+              onTailor={() => onTailor(resume)}
             />
           ))}
         </div>
@@ -368,6 +470,7 @@ function ResumeCard({
   tailored,
   onDuplicate,
   onDelete,
+  onTailor,
 }: {
   resume: ResumeSummary;
   previewMeta: Parameters<typeof ResumePreview>[0]['meta'];
@@ -375,6 +478,7 @@ function ResumeCard({
   tailored: boolean;
   onDuplicate: () => void;
   onDelete: () => void;
+  onTailor: () => void;
 }) {
   return (
     <div className="app-panel grid gap-4 p-4 sm:grid-cols-[138px_minmax(0,1fr)]">
@@ -391,7 +495,7 @@ function ResumeCard({
             Resume Title: <span className="font-semibold text-[var(--text-primary)]">{resume.company_name}</span>
           </p>
           <p className="truncate text-[var(--text-secondary)]">Job Title: {resume.job_title}</p>
-          {tailored ? <p className="truncate text-[var(--text-secondary)]">Used Base Resume: Not specified</p> : null}
+          {tailored ? <p className="truncate text-[var(--text-secondary)]">Used Base Resume: {resume.base_resume_name || 'Unavailable'}</p> : null}
         </div>
         <div className="grid gap-2">
           <Link href={`/resumes/${resume.id}`} className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-100">
@@ -399,7 +503,7 @@ function ResumeCard({
             Edit Resume
           </Link>
           {!tailored ? (
-            <button type="button" disabled className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-600 opacity-70">
+            <button type="button" onClick={onTailor} className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-600 transition hover:bg-emerald-100">
               <PlusCircle className="h-4 w-4" />
               Tailor to Job
             </button>
@@ -525,6 +629,166 @@ function CreateResumeModal({
             </button>
           ) : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function TailorResumeModal({
+  step,
+  baseResumes,
+  selectedBaseId,
+  selectedTemplate,
+  templates,
+  company,
+  role,
+  jobUrl,
+  description,
+  analysis,
+  analyzing,
+  generating,
+  onBaseChange,
+  onTemplateChange,
+  onCompanyChange,
+  onRoleChange,
+  onJobUrlChange,
+  onDescriptionChange,
+  onAnalyze,
+  onBack,
+  onGenerate,
+  onClose,
+}: {
+  step: TailorStep;
+  baseResumes: ResumeSummary[];
+  selectedBaseId: string;
+  selectedTemplate: string;
+  templates: ResumeTemplate[];
+  company: string;
+  role: string;
+  jobUrl: string;
+  description: string;
+  analysis: JDAnalysisResult | null;
+  analyzing: boolean;
+  generating: boolean;
+  onBaseChange: (value: string) => void;
+  onTemplateChange: (value: string) => void;
+  onCompanyChange: (value: string) => void;
+  onRoleChange: (value: string) => void;
+  onJobUrlChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
+  onAnalyze: () => void;
+  onBack: () => void;
+  onGenerate: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[130] flex items-center justify-center px-4 py-6">
+      <button type="button" aria-label="Close tailored resume setup" className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[18px] bg-white p-7 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-[-0.03em] text-slate-950">Create Job Tailored Resume</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              {step === 'setup' ? 'Use a base resume as factual evidence for one target job.' : 'Review grounded match signals before generation.'}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-600">Close</button>
+        </div>
+
+        {step === 'setup' ? (
+          <div className="mt-6 space-y-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <ModalField label="Base resume">
+                <select value={selectedBaseId} onChange={(event) => onBaseChange(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none focus:border-blue-500">
+                  <option value="">Select a base resume</option>
+                  {baseResumes.map((resume) => (
+                    <option key={resume.id} value={resume.id}>{resume.company_name} - {resume.job_title}</option>
+                  ))}
+                </select>
+              </ModalField>
+              <ModalField label="Template">
+                <select value={selectedTemplate} onChange={(event) => onTemplateChange(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none focus:border-blue-500">
+                  {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                </select>
+              </ModalField>
+              <ModalField label="Company name">
+                <input value={company} onChange={(event) => onCompanyChange(event.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-950 outline-none focus:border-blue-500" placeholder="Target company" />
+              </ModalField>
+              <ModalField label="Target role">
+                <input value={role} onChange={(event) => onRoleChange(event.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-950 outline-none focus:border-blue-500" placeholder="Software Engineer" />
+              </ModalField>
+            </div>
+            <ModalField label="Job URL (optional)">
+              <input value={jobUrl} onChange={(event) => onJobUrlChange(event.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-950 outline-none focus:border-blue-500" placeholder="https://company.com/jobs/role" />
+            </ModalField>
+            <ModalField label="Job description">
+              <textarea value={description} onChange={(event) => onDescriptionChange(event.target.value)} rows={9} className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-950 outline-none focus:border-blue-500" placeholder="Paste the complete job description. The tailored resume will only use claims supported by your selected base resume." />
+            </ModalField>
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={onClose} className="rounded-lg bg-slate-100 px-5 py-3 font-medium text-slate-600">Cancel</button>
+              <button type="button" onClick={onAnalyze} disabled={analyzing} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white disabled:cursor-wait disabled:opacity-60">
+                <Sparkles className="h-4 w-4" />
+                {analyzing ? 'Analyzing...' : 'Analyze Job Match'}
+              </button>
+            </div>
+          </div>
+        ) : analysis ? (
+          <div className="mt-6 space-y-5">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <AnalysisMetric label="Initial match" value={`${analysis.atsScore}%`} />
+              <AnalysisMetric label="Required skills" value={`${analysis.requiredSkills.length}`} />
+              <AnalysisMetric label="Missing keywords" value={`${analysis.missingKeywords.length}`} />
+            </div>
+            <AnalysisList title="Matched evidence" items={analysis.matchedKeywords} emptyText="No direct matched keywords found yet." tone="green" />
+            <AnalysisList title="Missing or unsupported" items={analysis.missingKeywords} emptyText="No critical gaps detected." tone="amber" />
+            <AnalysisList title="Required skills in this role" items={analysis.requiredSkills} emptyText="No required skills extracted." tone="blue" />
+            <p className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+              Generation rewrites and reorders supported evidence from the selected base resume. Unsupported requirements stay listed as gaps rather than being invented.
+            </p>
+            <div className="flex flex-wrap justify-between gap-3">
+              <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-5 py-3 font-medium text-slate-600">
+                <ArrowLeft className="h-4 w-4" />
+                Edit details
+              </button>
+              <button type="button" onClick={onGenerate} disabled={generating} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white disabled:cursor-wait disabled:opacity-60">
+                <Sparkles className="h-4 w-4" />
+                {generating ? 'Generating...' : 'Generate Tailored Resume'}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ModalField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function AnalysisMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</div>
+      <div className="mt-2 text-2xl font-semibold text-slate-950">{value}</div>
+    </div>
+  );
+}
+
+function AnalysisList({ title, items, emptyText, tone }: { title: string; items: string[]; emptyText: string; tone: 'green' | 'amber' | 'blue' }) {
+  const color = tone === 'green' ? 'bg-emerald-50 text-emerald-700' : tone === 'amber' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700';
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {items.length ? items.slice(0, 12).map((item) => (
+          <span key={`${title}-${item}`} className={`rounded-full px-3 py-1.5 text-xs font-medium ${color}`}>{item}</span>
+        )) : <span className="text-sm text-slate-500">{emptyText}</span>}
       </div>
     </div>
   );

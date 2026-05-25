@@ -23,8 +23,9 @@ export async function GET(request: Request) {
     const userId = requireAuthUserId(request);
     const { rows } = await db.query(
       `SELECT r.id, r.company_name, r.job_title, r.source_platform, r.template_id, r.ats_score, r.status, r.created_at, r.updated_at, r.resume_content,
-              p.location
+              r.base_resume_id, r.job_url, b.company_name AS base_resume_name, p.location
        FROM resumes r
+       LEFT JOIN resumes b ON b.id = r.base_resume_id
        LEFT JOIN profiles p ON p.user_id = r.user_id
        WHERE r.user_id=$1
        ORDER BY r.created_at DESC`,

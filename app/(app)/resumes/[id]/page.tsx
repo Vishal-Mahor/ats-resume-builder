@@ -440,6 +440,8 @@ export default function ResumeEditorPage() {
               <MiniMeta label="Template" value={resume.template_id || 'Default'} />
               <MiniMeta label="Status" value={resume.status} />
               <MiniMeta label="ATS" value={`${atsScore}%`} />
+              {resume.status === 'tailored' && resume.base_resume_name ? <MiniMeta label="Base" value={resume.base_resume_name} /> : null}
+              {resume.status === 'tailored' ? <MiniMeta label="Gaps" value={`${missingKeywords.length}`} /> : null}
             </div>
           </div>
 

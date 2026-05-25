@@ -9,6 +9,8 @@ import { getResumeTemplateById } from '@/lib/server/template-service';
 import { createNotificationForUser } from '@/lib/server/notification-service';
 import { assertCanUse, consumeUsage } from '@/lib/server/billing-service';
 import { generateTailoredResumePackage } from '@/lib/server/tailoring-pipeline';
+import { buildProfileFromBaseResume } from '@/lib/server/base-resume-evidence';
+import type { ResumeContent } from '@/lib/api';
 
 export const runtime = 'nodejs';
 
@@ -18,6 +20,8 @@ const generateSchema = z.object({
   template_id: z.string().min(1).max(80),
   source_platform: z.enum(['linkedin', 'indeed', 'naukri', 'manual']).default('manual'),
   job_description: z.string().min(50).max(8000),
+  job_url: z.string().trim().url().max(500).optional().or(z.literal('')),
+  base_resume_id: z.string().trim().min(1).optional(),
   cover_letter_tone: z.enum(['formal', 'modern', 'aggressive']).default('formal'),
 });
 
@@ -43,7 +47,7 @@ export async function POST(request: Request) {
       throw new HttpError(403, 'Verify both your email and phone number before generating a resume.');
     }
 
-    const effectiveProfile = userSettings.privacy.allowAiReuse
+    const reusableProfile = userSettings.privacy.allowAiReuse
       ? userProfile
       : {
           ...userProfile,
@@ -58,6 +62,22 @@ export async function POST(request: Request) {
           projects: [],
           education: [],
         };
+    let effectiveProfile = reusableProfile;
+
+    if (body.base_resume_id) {
+      const {
+        rows: [baseResume],
+      } = await db.query<{ resume_content: ResumeContent; status: string }>(
+        'SELECT resume_content, status FROM resumes WHERE id=$1 AND user_id=$2',
+        [body.base_resume_id, userId]
+      );
+
+      if (!baseResume || baseResume.status === 'tailored') {
+        throw new HttpError(400, 'Select a valid base resume before tailoring.');
+      }
+
+      effectiveProfile = buildProfileFromBaseResume(userProfile, baseResume.resume_content);
+    }
 
     const tailored = await generateTailoredResumePackage({
       companyName: body.company_name,
@@ -66,10 +86,15 @@ export async function POST(request: Request) {
       jobDescription: body.job_description,
       candidateProfile: effectiveProfile,
       resumeSettings: userSettings.resume,
+      includeCoverLetter: false,
     });
 
     if (!userSettings.privacy.keepResumeHistory) {
-      await db.query('DELETE FROM resumes WHERE user_id=$1', [userId]);
+      if (body.base_resume_id) {
+        await db.query('DELETE FROM resumes WHERE user_id=$1 AND id<>$2', [userId, body.base_resume_id]);
+      } else {
+        await db.query('DELETE FROM resumes WHERE user_id=$1', [userId]);
+      }
     }
 
     const {
@@ -77,8 +102,8 @@ export async function POST(request: Request) {
     } = await db.query(
       `INSERT INTO resumes
          (user_id, template_id, company_name, job_title, source_platform, resume_content, analysis_snapshot, cover_letter, cover_letter_tone,
-          ats_score, matched_keywords, missing_keywords, suggestions)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          ats_score, matched_keywords, missing_keywords, suggestions, status, base_resume_id, job_description, job_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        RETURNING id, created_at`,
       [
         userId,
@@ -99,6 +124,10 @@ export async function POST(request: Request) {
         JSON.stringify(tailored.atsReport.matchedKeywords),
         JSON.stringify(tailored.atsReport.missingKeywords),
         JSON.stringify(tailored.atsReport.suggestions),
+        'tailored',
+        body.base_resume_id ?? null,
+        body.job_description,
+        body.job_url || null,
       ]
     );
     await consumeUsage(userId, 'resume');
