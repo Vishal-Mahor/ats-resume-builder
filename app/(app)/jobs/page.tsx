@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Bookmark,
@@ -47,14 +47,18 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<LiveJobOpening[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [provider, setProvider] = useState('');
+  const [nextPageToken, setNextPageToken] = useState<string | undefined>();
+  const [lastSearchMode, setLastSearchMode] = useState<'standard' | 'ai'>('standard');
   const [aiCriteria, setAiCriteria] = useState<string[]>([]);
   const [resumes, setResumes] = useState<ResumeSummary[]>([]);
   const [resumeId, setResumeId] = useState('');
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     api.resumes
@@ -68,6 +72,23 @@ export default function JobsPage() {
 
   const selectedOpening = jobs.find((job) => job.id === selectedId) ?? jobs[0] ?? null;
   const availableFilters = (Object.keys(FILTER_DEFINITIONS) as FilterKey[]).filter((key) => activeFilters[key] === undefined);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !nextPageToken || loading || loadingMore || searchError) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          loadMoreJobs();
+        }
+      },
+      { rootMargin: '240px 0px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [nextPageToken, loading, loadingMore, searchError, jobs.length, lastSearchMode, resumeId, query, activeFilters]);
 
   async function performSearch(mode: 'standard' | 'ai') {
     if (mode === 'ai' && !resumeId) {
@@ -93,11 +114,14 @@ export default function JobsPage() {
       });
       setJobs(response.jobs);
       setProvider(response.provider);
+      setNextPageToken(response.nextPageToken);
+      setLastSearchMode(mode);
       setHasSearched(true);
       setSelectedId(response.jobs[0]?.id || '');
       setAiCriteria(response.aiCriteria?.skills ?? []);
     } catch (error) {
       setJobs([]);
+      setNextPageToken(undefined);
       setHasSearched(true);
       setSearchError(error instanceof Error ? error.message : 'Live job search failed.');
     } finally {
@@ -129,8 +153,36 @@ export default function JobsPage() {
     setJobs([]);
     setSelectedId('');
     setSearchError('');
+    setNextPageToken(undefined);
+    setLastSearchMode('standard');
     setHasSearched(false);
     setAiCriteria([]);
+  }
+
+  async function loadMoreJobs() {
+    if (!nextPageToken || loadingMore) return;
+
+    setLoadingMore(true);
+    setSearchError('');
+    try {
+      const response = await api.jobSearch.search({
+        query: query.trim() || undefined,
+        filters: cleanFilters(activeFilters),
+        mode: lastSearchMode,
+        resumeId: lastSearchMode === 'ai' ? resumeId : undefined,
+        pageToken: nextPageToken,
+      });
+      setJobs((current) => mergeJobPages(current, response.jobs, lastSearchMode === 'ai'));
+      setProvider(response.provider);
+      setNextPageToken(response.nextPageToken);
+      if (!selectedId && response.jobs[0]) {
+        setSelectedId(response.jobs[0].id);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not load more jobs.');
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   async function saveOpening(opening: LiveJobOpening) {
@@ -252,6 +304,11 @@ export default function JobsPage() {
             <p className="text-xs text-[var(--text-muted)]">{loading ? 'Searching live jobs...' : hasSearched ? `${jobs.length} jobs found` : 'Run a live search to view jobs'}</p>
           </div>
           {provider && <span className="hidden rounded-lg border px-3 py-1.5 text-[11px] text-[var(--text-secondary)] sm:inline-flex" style={{ borderColor: 'var(--border-subtle)' }}>{provider}</span>}
+          {aiCriteria.length > 0 && jobs[0]?.matchScore !== undefined && (
+            <span className="hidden rounded-lg border px-3 py-1.5 text-[11px] font-semibold text-[var(--accent-strong)] sm:inline-flex" style={{ borderColor: 'var(--border-strong)', background: 'var(--accent-soft)' }}>
+              Top match {jobs[0].matchScore}%
+            </span>
+          )}
         </div>
         <div className="flex items-center rounded-lg p-1 text-xs font-medium" style={{ background: 'var(--bg-panel-muted)' }}>
           <span className="rounded-md bg-[var(--bg-panel)] px-3 py-1.5 text-[var(--text-primary)]">Search results <strong className="ml-1">{jobs.length}</strong></span>
@@ -267,17 +324,29 @@ export default function JobsPage() {
             ) : searchError ? (
               <SearchState icon={<SlidersHorizontal size={23} />} title="Live search unavailable" body={searchError} />
             ) : jobs.length ? (
-              jobs.map((opening) => (
-                <JobRow
-                  key={opening.id}
-                  opening={opening}
-                  selected={selectedOpening?.id === opening.id}
-                  saved={savedIds.includes(opening.id)}
-                  saving={savingId === opening.id}
-                  onSelect={setSelectedId}
-                  onSave={saveOpening}
-                />
-              ))
+              <>
+                {jobs.map((opening, index) => (
+                  <JobRow
+                    key={opening.id}
+                    opening={opening}
+                    isTopMatch={Boolean(aiCriteria.length && index === 0 && opening.matchScore !== undefined)}
+                    selected={selectedOpening?.id === opening.id}
+                    saved={savedIds.includes(opening.id)}
+                    saving={savingId === opening.id}
+                    onSelect={setSelectedId}
+                    onSave={saveOpening}
+                  />
+                ))}
+                {nextPageToken && (
+                  <div
+                    ref={loadMoreSentinelRef}
+                    className="flex w-full items-center justify-center rounded-xl border px-4 py-3 text-xs font-semibold text-[var(--text-secondary)]"
+                    style={{ borderColor: 'var(--border-subtle)' }}
+                  >
+                    {loadingMore ? 'Loading more jobs...' : 'Scroll for more jobs'}
+                  </div>
+                )}
+              </>
             ) : hasSearched ? (
               <SearchState icon={<Search size={23} />} title="No active jobs found" body="Broaden a filter or try a different search term." />
             ) : (
@@ -418,6 +487,7 @@ function TypeaheadFilterChip({
 
 function JobRow({
   opening,
+  isTopMatch,
   selected,
   saved,
   saving,
@@ -425,6 +495,7 @@ function JobRow({
   onSave,
 }: {
   opening: LiveJobOpening;
+  isTopMatch: boolean;
   selected: boolean;
   saved: boolean;
   saving: boolean;
@@ -436,7 +507,14 @@ function JobRow({
       <button type="button" onClick={() => onSelect(opening.id)} className="block w-full px-3.5 pb-2.5 pt-3 text-left">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-[var(--text-primary)]">{opening.title}</h3>
+            <div className="flex min-w-0 items-center gap-2">
+              <h3 className="truncate text-sm font-semibold text-[var(--text-primary)]">{opening.title}</h3>
+              {isTopMatch && (
+                <span className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-emerald-300">
+                  Top match
+                </span>
+              )}
+            </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-secondary)]">
               <span>{opening.company}</span>
               <span className="inline-flex items-center gap-1"><MapPin size={11} />{opening.location}</span>
@@ -444,7 +522,10 @@ function JobRow({
             </div>
           </div>
           {opening.matchScore !== undefined && (
-            <span className="shrink-0 rounded-md bg-[var(--accent-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--accent-strong)]">{opening.matchScore}%</span>
+            <span className="shrink-0 rounded-md bg-[var(--accent-soft)] px-2.5 py-1 text-right text-[11px] font-semibold text-[var(--accent-strong)]">
+              {opening.matchScore}%
+              <span className="block text-[8px] uppercase tracking-[0.12em] text-[var(--text-muted)]">match</span>
+            </span>
           )}
         </div>
         <p className="mt-2 line-clamp-2 text-[11px] leading-[18px] text-[var(--text-secondary)]">{opening.description}</p>
@@ -587,4 +668,16 @@ function buildSuggestions(key: FilterKey, query: string, jobs: LiveJobOpening[])
 
 function cleanFilters(filters: ActiveFilters) {
   return Object.fromEntries(Object.entries(filters).filter(([, value]) => value?.trim())) as JobSearchFilters;
+}
+
+function mergeJobPages(current: LiveJobOpening[], incoming: LiveJobOpening[], sortByMatch: boolean) {
+  const byId = new Map<string, LiveJobOpening>();
+  [...current, ...incoming].forEach((job) => {
+    if (!byId.has(job.id)) {
+      byId.set(job.id, job);
+    }
+  });
+
+  const merged = Array.from(byId.values());
+  return sortByMatch ? merged.sort((left, right) => (right.matchScore ?? 0) - (left.matchScore ?? 0)) : merged;
 }

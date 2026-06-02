@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import ResumePreview from '@/components/resume/ResumePreview';
@@ -16,6 +16,7 @@ import {
 import {
   normalizeResumeSkills,
 } from '@/lib/skill-taxonomy';
+import { isLikelyTechSkill } from '@/lib/tech-skill-guardrails';
 
 type SuggestionSource = 'missing' | 'profile' | 'suggestion';
 type BuilderStepId =
@@ -41,7 +42,8 @@ type PlacementState = {
 
 type DragPayload =
   | { kind: 'skill'; value: string; sourceGroup: SkillGroupKey }
-  | { kind: 'pending'; value: string; source: SuggestionSource };
+  | { kind: 'pending'; value: string; source: SuggestionSource }
+  | { kind: 'category'; categoryId: string };
 
 type ChatMessage = {
   id: string;
@@ -129,12 +131,22 @@ export default function ResumeEditorPage() {
 
     return [
       ...(profile?.technicalSkills ?? []),
-      ...(profile?.softSkills ?? []),
     ].filter((skill, index, list) => {
       const normalized = skill.trim().toLowerCase();
-      return normalized && !existing.has(normalized) && list.findIndex((item) => item.trim().toLowerCase() === normalized) === index;
+      return normalized && isLikelyTechSkill(skill) && !existing.has(normalized) && list.findIndex((item) => item.trim().toLowerCase() === normalized) === index;
     });
   }, [skillCategories, profile]);
+
+  const skillInputSuggestions = useMemo(
+    () =>
+      uniqueLines([
+        ...profileSkillSuggestions,
+        ...missingKeywords,
+        ...matchedKeywords,
+        ...skillCategories.flatMap((category) => category.skills),
+      ]),
+    [matchedKeywords, missingKeywords, profileSkillSuggestions, skillCategories]
+  );
 
   const previewMeta = useMemo(
     () => ({
@@ -308,10 +320,6 @@ export default function ResumeEditorPage() {
 
   function openPlacement(item: string, source: SuggestionSource) {
     setPlacementState({ item, source });
-  }
-
-  function consumeDroppedItem(payload: DragPayload) {
-    return payload.value.trim();
   }
 
   async function handleResumePdfDownload() {
@@ -569,7 +577,11 @@ export default function ResumeEditorPage() {
                 <BuilderInput value={profile?.phone || ''} onChange={(event) => updateProfileField('phone', event.target.value)} placeholder="+91 98765 43210" />
               </FieldGroup>
               <FieldGroup label="Location">
-                <BuilderInput value={profile?.location || ''} onChange={(event) => updateProfileField('location', event.target.value)} placeholder="Bengaluru, India" />
+                <LocationAutocompleteInput
+                  value={profile?.location || ''}
+                  onChange={(value) => updateProfileField('location', value)}
+                  placeholder="Start typing city or country"
+                />
               </FieldGroup>
             </div>
           </BuilderSection>
@@ -628,7 +640,7 @@ export default function ResumeEditorPage() {
             <div className="space-y-4">
               {content.experience.map((exp, index) => (
                 <DropTargetCard
-                  key={`${exp.company}-${index}`}
+                  key={`experience-${index}`}
                   title={`Experience ${index + 1}`}
                   helper="Drop a missing item or suggestion here to add it as a bullet."
                   onDropItem={(item) => addItemToExperience(index, item)}
@@ -659,9 +671,10 @@ export default function ResumeEditorPage() {
                       />
                     </FieldGroup>
                     <FieldGroup label="Location">
-                      <BuilderInput
+                      <LocationAutocompleteInput
                         value={exp.location || ''}
-                        onChange={(event) => updateExperience(content, updateSection, index, 'location', event.target.value)}
+                        onChange={(value) => updateExperience(content, updateSection, index, 'location', value)}
+                        placeholder="Start typing city or country"
                       />
                     </FieldGroup>
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -720,7 +733,7 @@ export default function ResumeEditorPage() {
             <div className="space-y-4">
               {content.projects.map((project, index) => (
                 <DropTargetCard
-                  key={`${project.name}-${index}`}
+                  key={`project-${index}`}
                   title={`Project ${index + 1}`}
                   helper="Drop a missing item or suggestion here to add it as a project bullet."
                   onDropItem={(item) => addItemToProject(index, item)}
@@ -794,7 +807,7 @@ export default function ResumeEditorPage() {
           >
             <div className="space-y-4">
               {content.education.map((edu, index) => (
-                <div key={`${edu.institution}-${index}`} className="app-panel-muted p-4">
+                <div key={`education-${index}`} className="app-panel-muted p-4">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="text-sm font-semibold text-[var(--text-primary)]">Education {index + 1}</div>
                     {content.education.length > 1 ? (
@@ -867,6 +880,7 @@ export default function ResumeEditorPage() {
           >
             <SkillsSectionEditor
               categories={skillCategories}
+              suggestions={skillInputSuggestions}
               onChange={updateSkillCategories}
               onMove={moveSkillAcrossGroups}
             />
@@ -1154,7 +1168,7 @@ function BuilderSection({
   onToggleEnabled?: (enabled: boolean) => void;
 }) {
   return (
-    <section id={`builder-step-${id}`} className="app-panel p-5" onMouseEnter={onFocus}>
+    <section id={`builder-step-${id}`} className="app-panel relative overflow-visible p-5 focus-within:z-[70]" onMouseEnter={onFocus}>
       <div className="flex items-start gap-4">
         <div className="inline-flex h-10 min-w-[40px] items-center justify-center rounded-[12px] bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]">
           {step}
@@ -1303,18 +1317,99 @@ function InfoTile({ label, value }: { label: string; value: string }) {
 
 function FieldGroup({ label, children, action }: { label: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <label className="block">
+    <div className="relative z-[1] block focus-within:z-[80]">
       <span className="mb-2 flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-secondary)]">
         <span>{label}</span>
         {action}
       </span>
       {children}
-    </label>
+    </div>
   );
 }
 
 function BuilderInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`input-shell ${props.className || ''}`} />;
+}
+
+function LocationAutocompleteInput({
+  value,
+  onChange,
+  placeholder = 'Start typing city or country',
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  const [results, setResults] = useState<Array<{ id: string; label: string }>>([]);
+  const [searching, setSearching] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const deferredQuery = useDeferredValue(value.trim());
+
+  useEffect(() => {
+    if (deferredQuery.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+
+    let active = true;
+    setSearching(true);
+
+    fetch(`/api/location-search?q=${encodeURIComponent(deferredQuery)}`, {
+      cache: 'no-store',
+    })
+      .then((response) => response.json())
+      .then((data: { results?: Array<{ id: string; label: string }> }) => {
+        if (active) setResults(data.results ?? []);
+      })
+      .catch(() => {
+        if (active) setResults([]);
+      })
+      .finally(() => {
+        if (active) setSearching(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [deferredQuery]);
+
+  return (
+    <div className="relative z-[1] focus-within:z-[90]">
+      <input
+        value={value}
+        onFocus={() => setFocused(true)}
+        onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="input-shell"
+      />
+      {focused && deferredQuery.length >= 2 && (
+        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[120] overflow-hidden rounded-[18px] border bg-[var(--bg-panel)] shadow-[var(--shadow-panel)]" style={{ borderColor: 'var(--border-subtle)' }}>
+          {searching ? (
+            <div className="px-4 py-3 text-sm text-[var(--text-secondary)]">Searching cities and countries...</div>
+          ) : results.length ? (
+            results.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  onChange(item.label);
+                  setFocused(false);
+                }}
+                className="block w-full border-b px-4 py-3 text-left text-sm text-[var(--text-secondary)] transition last:border-b-0 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                style={{ borderColor: 'var(--border-subtle)' }}
+              >
+                {item.label}
+              </button>
+            ))
+          ) : (
+            <div className="px-4 py-3 text-sm text-[var(--text-secondary)]">No location found. Your typed value will still be used.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function BuilderTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -1323,10 +1418,12 @@ function BuilderTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
 
 function SkillsSectionEditor({
   categories,
+  suggestions,
   onChange,
   onMove,
 }: {
   categories: SkillCategory[];
+  suggestions: string[];
   onChange: (categories: SkillCategory[]) => void;
   onMove: (skill: string, from: SkillGroupKey, to: SkillGroupKey) => void;
 }) {
@@ -1358,6 +1455,19 @@ function SkillsSectionEditor({
     );
   }
 
+  function moveCategory(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+
+    const sourceIndex = categories.findIndex((category) => category.id === sourceId);
+    const targetIndex = categories.findIndex((category) => category.id === targetId);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const next = [...categories];
+    const [moved] = next.splice(sourceIndex, 1);
+    next.splice(targetIndex, 0, moved);
+    onChange(next);
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
@@ -1371,10 +1481,12 @@ function SkillsSectionEditor({
           <SkillDropZone
             key={category.id}
             category={category}
+            suggestions={suggestions}
             onRename={(label) => updateCategory(category.id, { label })}
             onAddSkill={(skill) => addSkill(category.id, skill)}
             onMove={onMove}
             onRemoveSkill={(skill) => removeSkill(category.id, skill)}
+            onMoveCategory={(sourceId) => moveCategory(sourceId, category.id)}
             onRemoveCategory={() => onChange(categories.filter((item) => item.id !== category.id))}
           />
         ))}
@@ -1668,88 +1780,204 @@ function PendingChip({
 
 function SkillDropZone({
   category,
+  suggestions,
   onRename,
   onAddSkill,
   onMove,
   onRemoveSkill,
+  onMoveCategory,
   onRemoveCategory,
 }: {
   category: SkillCategory;
+  suggestions: string[];
   onRename: (label: string) => void;
   onAddSkill: (skill: string) => void;
   onMove: (skill: string, from: SkillGroupKey, to: SkillGroupKey) => void;
   onRemoveSkill: (skill: string) => void;
+  onMoveCategory: (sourceId: string) => void;
   onRemoveCategory: () => void;
 }) {
   const [draftSkill, setDraftSkill] = useState('');
+  const [skillInputFocused, setSkillInputFocused] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [remoteSkillSuggestions, setRemoteSkillSuggestions] = useState<string[]>([]);
+  const [searchingSkills, setSearchingSkills] = useState(false);
+  const deferredSkillQuery = useDeferredValue(draftSkill.trim());
+  const skillSuggestions = useMemo(
+    () => buildSkillInputSuggestions(deferredSkillQuery, remoteSkillSuggestions, suggestions, category.skills),
+    [category.skills, deferredSkillQuery, remoteSkillSuggestions, suggestions]
+  );
+
+  useEffect(() => {
+    if (deferredSkillQuery.length < 2) {
+      setRemoteSkillSuggestions([]);
+      setSearchingSkills(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      setSearchingSkills(true);
+      fetch(`/api/skill-suggestions?q=${encodeURIComponent(deferredSkillQuery)}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+        .then((response) => (response.ok ? response.json() : { results: [] }))
+        .then((data: { results?: string[] }) => {
+          setRemoteSkillSuggestions(Array.isArray(data.results) ? data.results : []);
+        })
+        .catch((error) => {
+          if (!(error instanceof DOMException && error.name === 'AbortError')) {
+            setRemoteSkillSuggestions([]);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setSearchingSkills(false);
+          }
+        });
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [deferredSkillQuery]);
 
   function submitSkill() {
-    onAddSkill(draftSkill);
+    const value = skillSuggestions[0] ?? draftSkill;
+    if (!value.trim()) return;
+    onAddSkill(value);
     setDraftSkill('');
+    setSkillInputFocused(false);
   }
 
   return (
     <div
-      onDragOver={(event) => event.preventDefault()}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
       onDrop={(event) => {
         event.preventDefault();
+        setDragOver(false);
         const payload = parseDragPayload(event);
         if (!payload) return;
-        if (payload.kind === 'skill') {
+        if (payload.kind === 'category') {
+          onMoveCategory(payload.categoryId);
+        } else if (payload.kind === 'skill') {
           onMove(payload.value, payload.sourceGroup, category.id);
         } else {
           onAddSkill(payload.value);
         }
       }}
-      className="rounded-[14px] border border-[var(--border-subtle)] bg-[var(--bg-panel-muted)] p-4"
+      className={`relative grid grid-cols-[32px_minmax(0,1fr)] overflow-visible rounded-[14px] border border-[var(--border-subtle)] bg-[var(--bg-panel-muted)] transition ${
+        dragOver ? 'bg-[var(--accent-soft)]' : ''
+      }`}
     >
-      <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(160px,0.7fr)_minmax(220px,1fr)_auto_auto] lg:items-center">
-        <input
-          value={category.label}
-          onChange={(event) => onRename(event.target.value)}
-          className="min-w-0 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-input)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
-          placeholder="Category name"
-        />
-        <input
-          value={draftSkill}
-          onChange={(event) => setDraftSkill(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              submitSkill();
-            }
-          }}
-          className="input-shell py-2"
-          placeholder={`Add skill to ${category.label || 'category'}`}
-        />
-        <button type="button" onClick={onRemoveCategory} className="app-button-secondary px-3 py-2 text-xs">
-          Remove
-        </button>
-        <div className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-dim)]"></div>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {category.skills.length > 0 ? (
-          category.skills.map((skill) => (
-            <button
-              key={`${category.id}-${skill}`}
-              type="button"
-              draggable
-              onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = 'move';
-                event.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'skill', value: skill, sourceGroup: category.id } satisfies DragPayload));
+      <button
+        type="button"
+        draggable
+        aria-label={`Drag ${category.label || 'skill category'} category`}
+        onDragStart={(event) => {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'category', categoryId: category.id } satisfies DragPayload));
+        }}
+        className="flex min-h-full cursor-grab items-center justify-center text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--border-strong)] active:cursor-grabbing"
+      >
+        <DragHandleIcon />
+      </button>
+      <div className="min-w-0 p-4">
+        <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(160px,0.7fr)_minmax(220px,1fr)_auto] lg:items-center">
+          <input
+            value={category.label}
+            onChange={(event) => onRename(event.target.value)}
+            className="min-w-0 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-input)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] outline-none"
+            placeholder="Category name"
+          />
+          <div className="relative z-[1] focus-within:z-[70]">
+            <input
+              value={draftSkill}
+              onFocus={() => setSkillInputFocused(true)}
+              onBlur={() => window.setTimeout(() => setSkillInputFocused(false), 120)}
+              onChange={(event) => setDraftSkill(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  submitSkill();
+                }
               }}
-              onClick={() => onRemoveSkill(skill)}
-              className="inline-flex items-center gap-1 rounded-[10px] border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100 transition hover:border-rose-400/20 hover:bg-rose-400/10 hover:text-rose-100"
-            >
-              {skill}
-              <span className="text-[10px] font-semibold">×</span>
-            </button>
-          ))
-        ) : (
-          <span className="text-[11px] text-[var(--text-dim)]">No items here yet.</span>
-        )}
+              className="input-shell py-2"
+              placeholder={`Add skill to ${category.label || 'category'}`}
+            />
+            {skillInputFocused && draftSkill.trim().length >= 2 && (
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[90] overflow-hidden rounded-[14px] border bg-[var(--bg-panel)] shadow-[var(--shadow-panel)]" style={{ borderColor: 'var(--border-subtle)' }}>
+                {searchingSkills && skillSuggestions.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-[var(--text-secondary)]">Searching skills...</div>
+                ) : skillSuggestions.length ? (
+                  skillSuggestions.map((skill) => (
+                    <button
+                      key={skill}
+                      type="button"
+                      onClick={() => {
+                        onAddSkill(skill);
+                        setDraftSkill('');
+                        setSkillInputFocused(false);
+                      }}
+                      className="block w-full border-b px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)] transition last:border-b-0 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                      style={{ borderColor: 'var(--border-subtle)' }}
+                    >
+                      {skill}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-xs text-[var(--text-secondary)]">Press Enter to add "{draftSkill.trim()}".</div>
+                )}
+              </div>
+            )}
+          </div>
+          <button type="button" onClick={onRemoveCategory} className="app-button-secondary px-3 py-2 text-xs">
+            Remove
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {category.skills.length > 0 ? (
+            category.skills.map((skill) => (
+              <button
+                key={`${category.id}-${skill}`}
+                type="button"
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'skill', value: skill, sourceGroup: category.id } satisfies DragPayload));
+                }}
+                onClick={() => onRemoveSkill(skill)}
+                className="inline-flex items-center gap-1 rounded-[10px] border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100 transition hover:border-rose-400/20 hover:bg-rose-400/10 hover:text-rose-100"
+              >
+                {skill}
+                <span className="text-[10px] font-semibold">×</span>
+              </button>
+            ))
+          ) : (
+            <span className="text-[11px] text-[var(--text-dim)]">No items here yet.</span>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+function DragHandleIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="4" r="1" />
+      <circle cx="5" cy="8" r="1" />
+      <circle cx="5" cy="12" r="1" />
+      <circle cx="11" cy="4" r="1" />
+      <circle cx="11" cy="8" r="1" />
+      <circle cx="11" cy="12" r="1" />
+    </svg>
   );
 }
 
@@ -1770,10 +1998,10 @@ function DropTargetCard({
       onDrop={(event) => {
         event.preventDefault();
         const payload = parseDragPayload(event);
-        if (!payload) return;
+        if (!payload || payload.kind === 'category') return;
         onDropItem(payload.value);
       }}
-      className="app-panel-muted p-4"
+      className="app-panel-muted relative overflow-visible p-4"
     >
       <div className="mb-3 rounded-[10px] border border-dashed border-[var(--border-subtle)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[11px] leading-5 text-[var(--text-dim)]">
         <span className="font-semibold text-[var(--text-secondary)]">{title} dropzone:</span> {helper}
@@ -1852,7 +2080,7 @@ function PlacementModal({
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-secondary)]">Projects</div>
               <div className="mt-2 space-y-2">
                 {projects.map((project, index) => (
-                  <button key={`${project.name}-${index}`} type="button" onClick={() => onPlaceInProject(index)} className="app-button-secondary w-full justify-start px-3 py-2 text-xs">
+                  <button key={`placement-project-${index}`} type="button" onClick={() => onPlaceInProject(index)} className="app-button-secondary w-full justify-start px-3 py-2 text-xs">
                     {project.name || `Project ${index + 1}`}
                   </button>
                 ))}
@@ -1996,4 +2224,48 @@ function uniqueLines(items: string[]) {
     seen.add(normalized);
     return true;
   });
+}
+
+function buildSkillInputSuggestions(query: string, remoteSuggestions: string[], localSuggestions: string[], currentSkills: string[]) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.length < 2) return [];
+
+  const existing = new Set(currentSkills.map((skill) => skill.trim().toLowerCase()).filter(Boolean));
+  const remoteMatches = rankSkillSuggestions(remoteSuggestions, normalizedQuery, existing);
+  const localMatches = rankSkillSuggestions(localSuggestions, normalizedQuery, existing);
+
+  return uniqueLines([...remoteMatches, ...localMatches]).slice(0, 5);
+}
+
+function rankSkillSuggestions(suggestions: string[], normalizedQuery: string, existing: Set<string>) {
+  return uniqueLines(suggestions)
+    .map((skill) => ({ skill, score: getSkillSuggestionScore(skill, normalizedQuery) }))
+    .filter(({ skill, score }) => isLikelyTechSkill(skill) && !existing.has(skill.trim().toLowerCase()) && score < 100)
+    .sort((left, right) => {
+      if (left.score !== right.score) return left.score - right.score;
+      return left.skill.length - right.skill.length;
+    })
+    .map(({ skill }) => skill);
+}
+
+function getSkillSuggestionScore(skill: string, normalizedQuery: string) {
+  const normalizedSkill = skill.trim().toLowerCase();
+  const compactSkill = normalizedSkill.replace(/[^a-z0-9]/g, '');
+  const compactQuery = normalizedQuery.replace(/[^a-z0-9]/g, '');
+
+  if (normalizedSkill === normalizedQuery) return 0;
+  if (normalizedSkill.startsWith(normalizedQuery) || compactSkill.startsWith(compactQuery)) return 1;
+  if (normalizedSkill.includes(normalizedQuery) || compactSkill.includes(compactQuery)) return 3;
+  if (isSubsequence(compactQuery, compactSkill)) return 5;
+  return 100;
+}
+
+function isSubsequence(query: string, value: string) {
+  if (!query) return false;
+  let queryIndex = 0;
+  for (const character of value) {
+    if (character === query[queryIndex]) queryIndex += 1;
+    if (queryIndex === query.length) return true;
+  }
+  return false;
 }

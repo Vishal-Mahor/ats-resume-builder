@@ -518,11 +518,13 @@ export interface JobSearchInput {
   mode: 'standard' | 'ai';
   resumeId?: string;
   filters: JobSearchFilters;
+  pageToken?: string;
 }
 
 export interface JobSearchResponse {
   jobs: LiveJobOpening[];
   provider: string;
+  nextPageToken?: string;
   aiCriteria?: {
     query: string;
     skills: string[];

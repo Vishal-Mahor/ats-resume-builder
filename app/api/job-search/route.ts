@@ -12,6 +12,7 @@ const requestSchema = z.object({
   query: z.string().trim().max(200).optional(),
   mode: z.enum(['standard', 'ai']).default('standard'),
   resumeId: z.string().trim().optional(),
+  pageToken: z.string().trim().optional(),
   filters: z
     .object({
       title: z.string().trim().max(120).optional(),
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
       query: body.query,
       filters: body.filters,
       aiResume,
+      pageToken: body.pageToken,
     });
 
     return NextResponse.json(result);
